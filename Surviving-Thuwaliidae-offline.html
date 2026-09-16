@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<title>Surviving Thuwaliidae</title>
-<meta name="description" content="نسخة محمولة — افتح هذا الملف في أي متصفح.">
+<meta name="description" content="نموذج أولي ثلاثي الأبعاد بمنظور أول — Surviving Thuwaliidae">
 <style>
   :root{color-scheme:dark}
   html,body{margin:0}
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
+<title>Surviving Thuwaliidae</title>
 <title>Surviving Thuwaliidae</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -128,6 +128,34 @@ canvas#cv{display:block;width:100%;height:100%}
 .hud [hidden]{display:none!important}
 
 /* ---------- overlays ---------- */
+/* ---------- thumb controls, only where there are thumbs ---------- */
+.pad,.acts{position:absolute;bottom:12px;display:none;z-index:6;user-select:none;-webkit-user-select:none}
+.pad{inset-inline-start:12px;display:none;grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px);gap:4px}
+.acts{inset-inline-end:12px;flex-direction:column;gap:6px}
+.stage.touch .pad{display:grid}
+.stage.touch .acts{display:flex}
+.k{
+  background:rgba(12,14,16,.52);border:1px solid rgba(180,196,200,.30);
+  color:#dde5e7;border-radius:4px;font-size:15px;line-height:1;
+  display:grid;place-items:center;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;touch-action:none;
+  backdrop-filter:blur(2px);
+}
+.k:active,.k.on{background:rgba(159,198,209,.78);color:#05080a;border-color:#9fc6d1}
+.k.up{grid-area:1/2} .k.left{grid-area:2/1} .k.right{grid-area:2/3} .k.down{grid-area:3/2}
+.k.wide{width:74px;height:38px;font-family:var(--ui);font-size:12.5px;font-weight:500}
+.k:focus-visible{outline:2px solid #fff;outline-offset:2px}
+
+/* ---------- turn the phone ---------- */
+.tilt{
+  position:absolute;inset:0;z-index:30;display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  background:rgba(3,5,7,.94);text-align:center;padding:24px;
+}
+.tilt p{margin:0;font-family:var(--display);font-size:19px;color:#dde5e7}
+.tilt span{font-size:12.5px;color:var(--dim);max-width:30ch}
+@media (orientation:portrait) and (pointer:coarse){ .tilt{display:flex} }
+
 .veil{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   padding:20px;cursor:default;
   background:radial-gradient(ellipse at 50% 60%, rgba(5,8,10,.74), rgba(5,8,10,.95) 70%)}
@@ -222,12 +250,21 @@ button{font-family:inherit}
 .book .plate .cap{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:#6b5f52;margin-bottom:4px;direction:ltr;text-align:right}
 .book .strike{text-decoration:line-through;opacity:.55}
 .book .scrawl{font-family:var(--hand);font-style:italic;color:#8f2f2a;font-size:13.5px;line-height:1.5;transform:rotate(-.5deg);display:block;margin:9px 0 4px}
-.book-close{flex:none;background:var(--ink);color:var(--paper);border:none;width:22px;height:22px;
-  border-radius:2px;cursor:pointer;font-size:12px;line-height:1;display:grid;place-items:center}
+.book-close{flex:none;background:var(--ink);color:var(--paper);border:none;width:30px;height:30px;
+  border-radius:2px;cursor:pointer;font-size:14px;line-height:1;display:grid;place-items:center;
+  -webkit-tap-highlight-color:transparent}
+.book-close:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 
 @media (max-width:720px){
   .shell{padding-block:18px 36px}
-  .book{left:12px;bottom:12px;width:calc(100vw - 24px);max-height:44vh}
+  /* a slip, not a curtain: it must never swallow the screen or bury its own ✕ */
+  .book{left:10px;bottom:10px;width:min(270px,74vw);max-height:38vh}
+  .book-scroll{padding:10px 12px 12px}
+  .book h2{font-size:17px}
+  .book p,.book li,.book .scrawl{font-size:12.5px;line-height:1.55}
+  .book-bar{padding:6px 6px 6px 10px}
+  .book-close{width:38px;height:38px;font-size:16px}   /* a real thumb target */
+  .jump button{padding:9px 0;font-size:11px}
 }
 @media (prefers-reduced-motion:reduce){
   *{transition-duration:.01ms!important}
@@ -275,6 +312,29 @@ button{font-family:inherit}
       <div class="wep" id="wep" hidden></div>
       <div class="hide" id="hideTag" hidden>مختبئ</div>
       <div class="toast" id="toast"></div>
+    </div>
+
+    <div class="pad" id="padMove" aria-hidden="true">
+      <button class="k up"    data-k="w" aria-label="تقدّم">▲</button>
+      <button class="k left"  data-k="a" aria-label="يسار">◀</button>
+      <button class="k right" data-k="d" aria-label="يمين">▶</button>
+      <button class="k down"  data-k="s" aria-label="تراجع">▼</button>
+    </div>
+    <div class="acts" id="padActs" aria-hidden="true">
+      <button class="k wide" data-k="run"  aria-label="ركض">ركض</button>
+      <button class="k wide" data-k="jump" aria-label="قفز">قفز</button>
+      <button class="k wide" data-k="pick" aria-label="التقاط">التقاط</button>
+    </div>
+
+    <div class="tilt" id="tilt">
+      <svg viewBox="0 0 64 64" width="58" height="58" aria-hidden="true">
+        <rect x="23" y="6" width="18" height="34" rx="3" fill="none" stroke="#9fc6d1" stroke-width="2.4"/>
+        <path d="M14 46 a20 20 0 0 0 36 0" fill="none" stroke="#c9302c" stroke-width="2.4"
+              stroke-linecap="round" stroke-dasharray="3 4"/>
+        <path d="M46 40 l5 7 l-8 1 z" fill="#c9302c"/>
+      </svg>
+      <p>أدِر جوالك أفقياً</p>
+      <span>الشاشة العريضة تُظهر ما يقترب من الجانب</span>
     </div>
 
     <div class="intro" id="intro">
@@ -712,6 +772,29 @@ function dropP(e){
 stage.addEventListener('pointerup',dropP);
 stage.addEventListener('pointercancel',dropP);
 
+/* ---------- on-screen controls ---------- */
+let pickWanted=false;
+function bindPad(){
+  const coarse = matchMedia('(pointer:coarse)').matches || innerWidth<760;
+  if(coarse) stage.classList.add('touch');
+  const press=(el,on)=>{
+    const k=el.dataset.k;
+    el.classList.toggle('on',on);
+    if(k==='run'){ keys['shift']=on; return; }
+    if(k==='jump'){ if(on) keys[' ']=true; else keys[' ']=false; return; }
+    if(k==='pick'){ if(on) pickWanted=true; return; }
+    keys[k]=on;
+  };
+  document.querySelectorAll('.pad .k, .acts .k').forEach(el=>{
+    // pointer events so a thumb can slide off a button without sticking it down
+    el.addEventListener('pointerdown',e=>{ e.preventDefault(); el.setPointerCapture(e.pointerId); press(el,true); stage.focus({preventScroll:true}); });
+    el.addEventListener('pointerup',  e=>{ e.preventDefault(); press(el,false); });
+    el.addEventListener('pointercancel',()=>press(el,false));
+    el.addEventListener('lostpointercapture',()=>press(el,false));
+    el.addEventListener('contextmenu',e=>e.preventDefault());
+  });
+}
+
 function readMove(){
   let f=0,s=0;
   if(keys['w']||keys['arrowup']) f+=1;
@@ -769,7 +852,11 @@ function update(dt){
   P.a+=readTurn(dt);
   const mv=readMove();
   const ca=Math.cos(P.a), sa=Math.sin(P.a);
-  slide(g,P,(ca*mv.f-sa*mv.s)*108*dt,(sa*mv.f+ca*mv.s)*108*dt);
+  // running is fast and loud — it buys distance and costs concealment
+  const sprint = !!(keys['shift']) && !P.hidden;
+  P.running = sprint && (Math.abs(mv.f)+Math.abs(mv.s))>.05;
+  const spd = sprint ? 178 : 108;
+  slide(g,P,(ca*mv.f-sa*mv.s)*spd*dt,(sa*mv.f+ca*mv.s)*spd*dt);
   // jump
   if((keys[' ']||keys['spacebar']) && !P.air){ P.vz=205; P.air=true; jumpGrunt(); }
   if(P.air){
@@ -778,14 +865,17 @@ function update(dt){
   }
 
   const moving=Math.hypot(mv.f,mv.s)>.05;
-  P.bob = (moving && !P.air) ? Math.sin(t*11)*.022 : P.bob*.9;
+  P.bob = (moving && !P.air) ? Math.sin(t*(P.running?16:11))*(P.running?.034:.022) : P.bob*.9;
   P.breath += dt*(1.4+g.dread*2.2);
   P.iframe=Math.max(0,P.iframe-dt);
   P.hidden=g.covers.some(c=>inRect(P.x,P.y,c));
 
+  // the pick button reaches a little further than walking over a thing does
+  const reach = pickWanted ? 72 : 34;
+  pickWanted=false;
   for(const it of g.items){
     if(it.taken) continue;
-    if(Math.hypot(P.x-it.x,P.y-it.y)<34){
+    if(Math.hypot(P.x-it.x,P.y-it.y)<reach){
       it.taken=true; P.weapon=WEAPONS[it.kind]||WEAPONS.oar; P.pickup=1.4;
       beep(300,.08,.05);
       if(g.screen===1) g.exit.locked=false;
@@ -814,7 +904,7 @@ function update(dt){
     }
   }
   g.following=following;
-  const noise=1+following*0.24;
+  const noise=(1+following*0.24)*(P.running?1.45:1);
 
   let nearest=1e9, behind=0;
   for(const z of g.infected){
@@ -890,7 +980,7 @@ function update(dt){
     return !z.dead;
   });
 
-  if(moving){ P.step+=dt*3.1; if(P.step>=1){ P.step=0; footstep(g.screen,.035+Math.random()*.02,0); } }
+  if(moving){ P.step+=dt*(P.running?5.2:3.1); if(P.step>=1){ P.step=0; footstep(g.screen,.035+Math.random()*.02,0); } }
   breathing(dt,moving?1:0,g.dread,P.hp<=1?1:0);
 
   const target=nearest<1e8?Math.max(0,1-nearest/300):0;
@@ -2044,6 +2134,7 @@ document.getElementById('outroRedo').addEventListener('click',()=>endOutro(true)
 /* ---------------- boot ---------------- */
 function boot(saved){
   initGL();
+  bindPad();
   if(saved&&saved.counters) counters=saved.counters;
   if(saved&&saved.strain) strain=saved.strain;
   if(saved&&saved.rescue) rescue=saved.rescue;
