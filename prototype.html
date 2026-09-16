@@ -326,6 +326,7 @@ const hurtEl= document.getElementById('hurt');
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 ctx.imageSmoothingEnabled = false;
+ctx.direction = 'ltr';   // the page is RTL; without this the canvas flips digit pairs
 
 /* ============================================================
    procedural materials — generated once, sampled per column/pixel
@@ -973,7 +974,7 @@ function endScreen(kind){
   G.over=true; running=false;
   if(kind==='fail'){
     showVeil('Screen 0'+G.screen+' · Down','أصابك',
-      'ثلاث إصابات وسقطت. العدّادات محفوظة — أعد الشاشة وجرّب أسلوباً آخر.',
+      'سقطت. العدّادات ومن أنقذتهم محفوظون — أعد الشاشة وجرّب أسلوباً آخر.',
       'أعد الشاشة', ()=>go(G.screen));
     return;
   }
