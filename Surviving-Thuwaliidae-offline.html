@@ -818,9 +818,12 @@ function bindStick(){
   };
   const start=e=>{
     if(id!==null) return;
-    id=e.pointerId; el.setPointerCapture(id); el.classList.add('live');
+    id=e.pointerId;
+    el.classList.add('live');
     const r=el.getBoundingClientRect();
     set(e.clientX-(r.left+r.width/2), e.clientY-(r.top+r.height/2));
+    // capture is a convenience, not a requirement — never let it abort the grab
+    try{ el.setPointerCapture(id); }catch(err){}
     stage.focus({preventScroll:true});
     e.preventDefault();
   };
@@ -888,7 +891,7 @@ function bindPad(){
   };
   document.querySelectorAll('.acts .k').forEach(el=>{
     // pointer events so a thumb can slide off a button without sticking it down
-    el.addEventListener('pointerdown',e=>{ e.preventDefault(); el.setPointerCapture(e.pointerId); press(el,true); stage.focus({preventScroll:true}); });
+    el.addEventListener('pointerdown',e=>{ e.preventDefault(); press(el,true); try{ el.setPointerCapture(e.pointerId); }catch(err){} stage.focus({preventScroll:true}); });
     el.addEventListener('pointerup',  e=>{ e.preventDefault(); press(el,false); });
     el.addEventListener('pointercancel',()=>press(el,false));
     el.addEventListener('lostpointercapture',()=>press(el,false));
