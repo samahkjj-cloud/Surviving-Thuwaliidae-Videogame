@@ -444,8 +444,8 @@ function mkInfected(x,y,st,scale){
 function buildBeach(g){
   g.W=1700; g.H=940;
   g.P.x=150; g.P.y=800; g.P.a=-0.5;
-  g.sky='beach'; g.floor=TEX.sand; g.floorRepeat=26;
-  g.fogColor=0x707a7e; g.fogDensity=.030; g.ambient=.70; g.torch=.55;
+  g.sky='beach'; g.floor=TEX.sand; g.floorRepeat=64;
+  g.fogColor=0x59636a; g.fogDensity=.042; g.ambient=.34; g.torch=.85;
   boat(g, 470,560,270,98,-0.10);
   boat(g, 820,330,250,90, 0.14);
   boat(g,1180,690,265,95,-0.06);
@@ -469,8 +469,8 @@ function buildBeach(g){
 function buildMarket(g){
   g.W=1800; g.H=1020;
   g.P.x=90; g.P.y=510; g.P.a=0;
-  g.sky='market'; g.floor=TEX.dirt; g.floorRepeat=30;
-  g.fogColor=0x17120e; g.fogDensity=.055; g.ambient=.16; g.torch=1.25;
+  g.sky='market'; g.floor=TEX.dirt; g.floorRepeat=64;
+  g.fogColor=0x120e0a; g.fogDensity=.062; g.ambient=.085; g.torch=1.5;
   for(let r=0;r<5;r++){
     const y=140+r*180;
     for(let c=0;c<6;c++){
@@ -503,8 +503,8 @@ function buildMarket(g){
 }
 function buildCorniche(g){
   g.W=1800; g.H=1000;
-  g.sky='night'; g.floor=TEX.tile; g.floorRepeat=22;
-  g.fogColor=0x04070a; g.fogDensity=.072; g.ambient=.05; g.torch=1.45;
+  g.sky='night'; g.floor=TEX.tile; g.floorRepeat=34;
+  g.fogColor=0x030508; g.fogDensity=.078; g.ambient=.028; g.torch=1.7;
   box(g,0,60,g.W,16,52,TEX.concrete);
   for(let i=0;i<7;i++) box(g,180+i*230,150,26,26,150,TEX.concrete,.8);
   for(let i=0;i<5;i++) box(g,300+i*300,430,140,34,44,TEX.concrete,.85);
@@ -844,7 +844,7 @@ function initGL(){
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=1.05;
+  renderer.toneMappingExposure=0.82;
   camera=new THREE.PerspectiveCamera(72,16/9,0.08,260);
   resizeGL();
   addEventListener('resize',resizeGL);
@@ -934,7 +934,7 @@ function buildScene(g){
   const floorTex=tex(g.floor,g.floorRepeat);
   const floor=new THREE.Mesh(
     new THREE.PlaneGeometry(WX(g.W),WZ(g.H)),
-    new THREE.MeshStandardMaterial({map:floorTex,roughness:.97,metalness:0})
+    new THREE.MeshStandardMaterial({map:floorTex,bumpMap:floorTex,bumpScale:.035,roughness:.98,metalness:0})
   );
   floor.rotation.x=-Math.PI/2;
   floor.position.set(WX(g.W)/2,0,WZ(g.H)/2);
@@ -959,8 +959,10 @@ function buildScene(g){
       new THREE.BoxGeometry(WX(o.w),WX(o.h),WZ(o.d)),
       new THREE.MeshStandardMaterial({
         map:tex(o.tex,Math.max(1,Math.round(o.w/60))),
-        color:new THREE.Color(o.tint,o.tint,o.tint).multiplyScalar(1),
-        roughness:.93
+        bumpMap:tex(o.tex,Math.max(1,Math.round(o.w/60))),
+        bumpScale:.03,
+        color:new THREE.Color(o.tint,o.tint,o.tint),
+        roughness:.95
       })
     );
     m.position.set(WX(o.x+o.w/2),WX(o.h)/2,WZ(o.y+o.d/2));
@@ -1035,10 +1037,10 @@ function buildScene(g){
   // lights
   hemi=new THREE.HemisphereLight(0x9fb4bd,0x3a3229,g.ambient);
   scene.add(hemi);
-  ambientL=new THREE.AmbientLight(0x6a7a80,g.ambient*.35);
+  ambientL=new THREE.AmbientLight(0x5a6a72,g.ambient*.22);
   scene.add(ambientL);
   if(g.sky==='beach'){
-    const sun=new THREE.DirectionalLight(0xc8d2d4,.55);
+    const sun=new THREE.DirectionalLight(0xaab6ba,.30);
     sun.position.set(WX(g.W)*.3,26,WZ(g.H)*.2);
     scene.add(sun);
   }
