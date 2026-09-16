@@ -112,14 +112,14 @@ canvas#cv{display:block;width:100%;height:100%}
 
 /* ---------- in-frame HUD ---------- */
 .hud{position:absolute;inset:0;pointer-events:none;font-family:var(--ui)}
-.hud .pips{position:absolute;top:12px;inset-inline-start:14px;display:flex;gap:5px}
+.hud .pips{position:absolute;top:12px;left:14px;display:flex;gap:5px}
 .pip{width:11px;height:11px;border:1px solid rgba(160,176,180,.45)}
 .pip.out{background:var(--ok);border-color:var(--ok)}
 .pip.with{background:#e0ce8c;border-color:#e0ce8c}
 .pip.gone{border-color:rgba(201,48,44,.75);position:relative;background:
   linear-gradient(45deg,transparent 43%,var(--warn) 43%,var(--warn) 57%,transparent 57%),
   linear-gradient(-45deg,transparent 43%,var(--warn) 43%,var(--warn) 57%,transparent 57%)}
-.hud .count{position:absolute;top:29px;inset-inline-start:14px;
+.hud .count{position:absolute;top:29px;left:14px;
   font-family:var(--mono);font-size:11px;color:rgba(190,200,203,.6);direction:ltr}
 .hud .pausebtn{
   position:absolute;top:10px;right:12px;pointer-events:auto;
@@ -146,7 +146,7 @@ canvas#cv{display:block;width:100%;height:100%}
 .paused .tog[aria-pressed="true"]{color:#2f5c6b;border-color:#2f5c6b}
 
 
-.hud .hide{position:absolute;top:50px;inset-inline-start:14px;font-size:11.5px;color:rgba(159,198,209,.85)}
+.hud .hide{position:absolute;top:50px;left:14px;font-size:11.5px;color:rgba(159,198,209,.85)}
 .hud .toast{position:absolute;bottom:34px;left:0;right:0;text-align:center;
   font-size:13px;color:rgba(228,218,190,.95);opacity:0;transition:opacity .3s ease;
   text-shadow:0 2px 12px rgba(0,0,0,.9)}
@@ -366,11 +366,11 @@ button{font-family:inherit}
            top:calc(52px + env(safe-area-inset-top,0px))}
   .hud .wep{right:calc(12px + env(safe-area-inset-right,0px));
             top:calc(68px + env(safe-area-inset-top,0px))}
-  .hud .pips{inset-inline-start:calc(14px + env(safe-area-inset-left,0px));
+  .hud .pips{left:calc(14px + env(safe-area-inset-left,0px));
              top:calc(12px + env(safe-area-inset-top,0px))}
-  .hud .count{inset-inline-start:calc(14px + env(safe-area-inset-left,0px));
+  .hud .count{left:calc(14px + env(safe-area-inset-left,0px));
               top:calc(31px + env(safe-area-inset-top,0px))}
-  .hud .hide{inset-inline-start:calc(14px + env(safe-area-inset-left,0px));
+  .hud .hide{left:calc(14px + env(safe-area-inset-left,0px));
              top:calc(52px + env(safe-area-inset-top,0px))}
   .hud .toast{bottom:calc(36px + env(safe-area-inset-bottom,0px))}
 
