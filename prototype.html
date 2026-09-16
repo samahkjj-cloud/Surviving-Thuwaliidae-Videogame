@@ -232,6 +232,7 @@ kbd{
       <span><kbd>A D</kbd> جانبياً</span>
       <span><kbd>← →</kbd> التفات</span>
       <span><kbd>سحب</kbd> يمين الشاشة للنظر · يسارها للحركة</span>
+      <span>الضربة تنطلق تلقائياً حين يدخل العدو مدى سلاحك</span>
     </div>
     <div class="toggles">
       <button class="tog" id="sndBtn" aria-pressed="false">الصوت</button>
@@ -273,6 +274,7 @@ kbd{
       <ul>
         <li>منظور أول: الرعب مصدره ما لا تراه خلفك</li>
         <li>المصاب يتجمّد حين تنظر إليه — والالتفات ثمنه</li>
+        <li>الأسلحة تُقايض المدى بالإيقاع: سكين · مجداف · رمح</li>
         <li>نظام التكيّف يقرأ أسلوبك ويردّ عليه</li>
         <li>الواجهة كلها دفتر ميدان مكتوب بخط اليد</li>
       </ul>
@@ -318,6 +320,136 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 ctx.imageSmoothingEnabled = false;
 
+/* ============================================================
+   procedural materials — generated once, sampled per column/pixel
+   ============================================================ */
+function rng(seed){ let s=seed>>>0; return ()=> (s=(s*1664525+1013904223)>>>0)/4294967296; }
+
+function makeTex(w,h,paint){
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const x=c.getContext('2d');
+  paint(x,w,h);
+  const img=x.getImageData(0,0,w,h);
+  return { cv:c, w, h, data:img.data };
+}
+function grit(x,w,h,seed,n,alphaLo,alphaHi,dark){
+  const r=rng(seed);
+  for(let i=0;i<n;i++){
+    const a=alphaLo+r()*(alphaHi-alphaLo);
+    x.fillStyle = dark ? `rgba(0,0,0,${a})` : `rgba(255,255,255,${a})`;
+    x.fillRect((r()*w)|0,(r()*h)|0,1+((r()*2)|0),1);
+  }
+}
+
+const TEX = {};
+function buildTextures(){
+  // weathered timber for market stalls
+  TEX.plank = makeTex(64,64,(x,w,h)=>{
+    x.fillStyle='#8a7050'; x.fillRect(0,0,w,h);
+    const r=rng(11);
+    for(let i=0;i<8;i++){
+      const y=i*8;
+      x.fillStyle=`rgb(${118+r()*46|0},${92+r()*38|0},${62+r()*30|0})`;
+      x.fillRect(0,y,w,7);
+      x.fillStyle='rgba(30,20,12,.55)'; x.fillRect(0,y+7,w,1);
+      for(let k=0;k<16;k++){            // grain
+        x.fillStyle=`rgba(46,32,20,${.06+r()*.16})`;
+        x.fillRect((r()*w)|0,y+((r()*7)|0),4+((r()*14)|0),1);
+      }
+    }
+    grit(x,w,h,7,200,.03,.13,true);
+  });
+
+  // salt-bitten concrete for the corniche
+  TEX.concrete = makeTex(64,64,(x,w,h)=>{
+    x.fillStyle='#8d9598'; x.fillRect(0,0,w,h);
+    const r=rng(23);
+    for(let i=0;i<90;i++){
+      x.fillStyle=`rgba(${90+r()*60|0},${98+r()*58|0},${100+r()*56|0},${.25+r()*.4})`;
+      const s=2+r()*9;
+      x.fillRect(r()*w,r()*h,s,s*(.5+r()));
+    }
+    for(let i=0;i<5;i++){               // damp streaks
+      x.fillStyle=`rgba(46,58,62,${.12+r()*.16})`;
+      x.fillRect(r()*w,0,1+r()*3,h);
+    }
+    grit(x,w,h,29,320,.03,.14,true);
+    grit(x,w,h,31,120,.03,.10,false);
+  });
+
+  // painted fibreglass hull: white topsides, pale blue boot stripe
+  TEX.hull = makeTex(64,64,(x,w,h)=>{
+    x.fillStyle='#d5dcdc'; x.fillRect(0,0,w,h);
+    x.fillStyle='#9fc6d1'; x.fillRect(0,h*0.52,w,h*0.30);
+    x.fillStyle='#2f3d40'; x.fillRect(0,h*0.46,w,3);
+    const r=rng(41);
+    for(let i=0;i<70;i++){              // scuffs and waterline stain
+      x.fillStyle=`rgba(${60+r()*70|0},${70+r()*60|0},${70+r()*60|0},${.05+r()*.2})`;
+      x.fillRect(r()*w,h*0.5+r()*h*0.5,2+r()*10,1+r()*2);
+    }
+    grit(x,w,h,43,150,.02,.09,true);
+  });
+
+  // lime-washed market walls
+  TEX.plaster = makeTex(64,64,(x,w,h)=>{
+    x.fillStyle='#a3937b'; x.fillRect(0,0,w,h);
+    const r=rng(59);
+    for(let i=0;i<120;i++){
+      x.fillStyle=`rgba(${120+r()*70|0},${104+r()*60|0},${82+r()*54|0},${.2+r()*.35})`;
+      x.fillRect(r()*w,r()*h,3+r()*12,2+r()*8);
+    }
+    grit(x,w,h,61,260,.03,.12,true);
+  });
+
+  // ---- floors ----
+  TEX.sand = makeTex(64,64,(x,w,h)=>{
+    x.fillStyle='#6d6154'; x.fillRect(0,0,w,h);
+    const r=rng(71);
+    for(let i=0;i<620;i++){             // wet pebbles and shell grit
+      const g=r();
+      x.fillStyle = g>.86 ? `rgba(206,214,216,${.25+r()*.5})`
+                 : g>.55 ? `rgba(52,42,34,${.3+r()*.45})`
+                         : `rgba(92,80,66,${.2+r()*.4})`;
+      const s=1+r()*2.6;
+      x.beginPath(); x.ellipse(r()*w,r()*h,s,s*.75,r()*3,0,6.28); x.fill();
+    }
+  });
+
+  TEX.dirt = makeTex(64,64,(x,w,h)=>{
+    x.fillStyle='#6a5943'; x.fillRect(0,0,w,h);
+    const r=rng(83);
+    for(let i=0;i<420;i++){
+      x.fillStyle=`rgba(${(58+r()*70)|0},${(46+r()*58)|0},${(32+r()*44)|0},${.25+r()*.45})`;
+      const s=1+r()*3.4;
+      x.beginPath(); x.ellipse(r()*w,r()*h,s,s*.7,0,0,6.28); x.fill();
+    }
+    for(let i=0;i<24;i++){              // scattered fish scales catching light
+      x.fillStyle=`rgba(198,206,204,${.10+r()*.22})`;
+      x.fillRect(r()*w,r()*h,1,1);
+    }
+  });
+
+  // promenade paving — real tiles, so perspective does the work
+  TEX.tile = makeTex(64,64,(x,w,h)=>{
+    x.fillStyle='#79838a'; x.fillRect(0,0,w,h);
+    const r=rng(97);
+    for(let gy=0;gy<2;gy++) for(let gx=0;gx<2;gx++){
+      const px=gx*32, py=gy*32;
+      x.fillStyle=`rgb(${(108+r()*24)|0},${(116+r()*22)|0},${(120+r()*22)|0})`;
+      x.fillRect(px+1.5,py+1.5,29,29);
+      for(let i=0;i<26;i++){
+        x.fillStyle=`rgba(${(70+r()*60)|0},${(78+r()*58)|0},${(82+r()*56)|0},${.2+r()*.3})`;
+        x.fillRect(px+2+r()*27,py+2+r()*27,1+r()*3,1+r()*2);
+      }
+    }
+    x.fillStyle='rgba(28,34,38,.75)';   // grout
+    x.fillRect(0,0,w,1.5); x.fillRect(0,32,w,1.5);
+    x.fillRect(0,0,1.5,h); x.fillRect(32,0,1.5,h);
+    grit(x,w,h,101,180,.02,.10,true);
+  });
+}
+buildTextures();
+
 /* ---------------- strains ---------------- */
 const STRAINS = {
   engage : { key:'engage',  name:'جِلد متيبّس',  said:'RIGID DERMIS',
@@ -336,7 +468,8 @@ let strain = null;
 function fresh(screen){
   const g = {
     screen, over:false,
-    P:{ x:0,y:0, a:0, r:9, hp:3, armed:false, iframe:0, hidden:false, bob:0, breath:0 },
+    P:{ x:0,y:0, a:0, r:9, hp:3, armed:false, iframe:0, hidden:false, bob:0, breath:0,
+        weapon:WEAPONS.none, atkCd:0, swing:0, pickup:0 },
     walls:[], covers:[], items:[], infected:[], ground:[], tarps:[],
     exit:null, sign:null, boat:null,
     shake:0, flash:0, lightJitter:1, dread:0,
@@ -348,16 +481,43 @@ function fresh(screen){
   return g;
 }
 
-/* a box obstacle becomes four walls */
-function box(g,x,y,w,h,height,shade){
-  g.walls.push({x1:x,     y1:y,     x2:x+w, y2:y,     h:height, c:shade});
-  g.walls.push({x1:x+w,   y1:y,     x2:x+w, y2:y+h,   h:height, c:shade});
-  g.walls.push({x1:x+w,   y1:y+h,   x2:x,   y2:y+h,   h:height, c:shade});
-  g.walls.push({x1:x,     y1:y+h,   x2:x,   y2:y,     h:height, c:shade});
+/* a box obstacle becomes four walls, wound clockwise so normals face out */
+function box(g,x,y,w,h,height,tex,tint){
+  const seg=(x1,y1,x2,y2)=>g.walls.push({x1,y1,x2,y2,h:height,tex,tint:tint||1});
+  seg(x,y,x+w,y); seg(x+w,y,x+w,y+h); seg(x+w,y+h,x,y+h); seg(x,y+h,x,y);
   g.walls.rects = g.walls.rects || [];
   g.walls.rects.push({x,y,w,h});
 }
+/* a boat needs a boat silhouette, not a crate: closed polygon, per-segment sheer */
+function hullShape(g,cx,cy,len,beam,rot,tex){
+  const pts=[];
+  const N=14;
+  for(let i=0;i<N;i++){
+    const u=i/N*Math.PI*2;
+    // teardrop: sharp at the bow, full at the stern
+    const t=Math.cos(u), s=Math.sin(u);
+    const taper=0.55+0.45*(1-Math.max(0,t));
+    pts.push([t*len/2, s*beam/2*taper]);
+  }
+  const ca=Math.cos(rot), sa=Math.sin(rot);
+  const wp=pts.map(p=>[cx+p[0]*ca-p[1]*sa, cy+p[0]*sa+p[1]*ca]);
+  for(let i=0;i<wp.length;i++){
+    const a=wp[i], b=wp[(i+1)%wp.length];
+    const fwd=Math.abs((a[0]-cx)*ca+(a[1]-cy)*sa)/(len/2);
+    g.walls.push({x1:a[0],y1:a[1],x2:b[0],y2:b[1], h:34+22*(1-fwd), tex, tint:1});
+  }
+  g.walls.rects = g.walls.rects || [];
+  g.walls.rects.push({x:cx-len/2,y:cy-beam/2,w:len,h:beam});
+}
 function rects(g){ return g.walls.rects || []; }
+
+/* ---------------- weapons ---------------- */
+const WEAPONS = {
+  none : { key:'none',  name:'أعزل',   said:'UNARMED', reach:0,  cd:0,   dmg:0, len:0 },
+  knife: { key:'knife', name:'سكين',   said:'KNIFE',   reach:26, cd:.34, dmg:1, len:26 },
+  oar  : { key:'oar',   name:'مجداف',  said:'OAR',     reach:40, cd:.52, dmg:1, len:52 },
+  spear: { key:'spear', name:'رمح',    said:'SPEAR',   reach:64, cd:.78, dmg:2, len:92 }
+};
 
 function scatter(g,n,seed,x0,y0,x1,y1,col){
   let s=seed; const rnd=()=> (s=(s*9301+49297)%233280)/233280;
@@ -369,69 +529,82 @@ function scatter(g,n,seed,x0,y0,x1,y1,col){
 
 function buildBeach(g){
   // stand clear of the hull, sea on the left, village away to the right
-  g.P.x = 170; g.P.y = 440; g.P.a = 0;
-  g.fog='#697377'; g.fogNear=110; g.fogFar=560; g.ambient=.66;
-  g.sky='beach';
-  box(g,300,250,270,96, 52,'#c3cdcd');            // near hull
-  box(g,640,140,300,88, 52,'#c3cdcd');            // far hull
-  scatter(g,700,7,0,200,960,540,'rgba(14,11,9,.55)');
-  g.items.push({x:470,y:430, kind:'oar', taken:false});
+  g.P.x = 170; g.P.y = 450; g.P.a = 0;
+  g.fog='#697377'; g.fogNear=110; g.fogFar=580; g.ambient=.66;
+  g.sky='beach'; g.floor=TEX.sand; g.floorScale=.42;
+  hullShape(g,430,300,260,96,-0.08,TEX.hull);
+  hullShape(g,780,185,240,88, 0.10,TEX.hull);
+  g.items.push({x:470,y:440, kind:'oar',   taken:false});
+  g.items.push({x:250,y:200, kind:'knife', taken:false});
+  g.infected.push(mkInfected(760,430,null,.72));
+  g.infected.push(mkInfected(600,110,null,.72));
   g.exit = {x:850,y:400,w:110,h:140, label:'الطريق إلى القرية', locked:true};
 }
 
 function buildMarket(g){
   g.P.x = 70; g.P.y = 270; g.P.a = 0;
-  g.fog='#14100d'; g.fogNear=50; g.fogFar=360; g.ambient=.16;
-  g.sky='market';
+  g.fog='#14100d'; g.fogNear=50; g.fogFar=380; g.ambient=.16;
+  g.sky='market'; g.floor=TEX.dirt; g.floorScale=.40;
   // materials stay mid-tone; the dark comes from the torch, never from the paint
-  box(g,200, 60,70,70, 64,'#9c8264');
-  box(g,200,150,70,70, 64,'#9c8264');
-  box(g,200,330,70,70, 64,'#9c8264');
-  box(g,430,290,70,70, 64,'#9c8264');
-  box(g,500,290,70,70, 64,'#9c8264');
-  box(g,660,100,70,70, 64,'#9c8264');
-  box(g,660,190,70,70, 64,'#9c8264');
-  box(g,330,430,150,50, 50,'#8a7256');
-  box(g,  0,  0,960,10, 130,'#6d5d49');           // outer walls
-  box(g,  0,530,960,10, 130,'#6d5d49');
-  scatter(g,420,19,0,0,960,540,'rgba(120,102,80,.5)');
+  box(g,200, 60,70,70, 64,TEX.plank);
+  box(g,200,150,70,70, 64,TEX.plank);
+  box(g,200,330,70,70, 64,TEX.plank);
+  box(g,430,290,70,70, 64,TEX.plank);
+  box(g,500,290,70,70, 64,TEX.plank);
+  box(g,660,100,70,70, 64,TEX.plank);
+  box(g,660,190,70,70, 64,TEX.plank);
+  box(g,330,430,150,50, 50,TEX.plank,.86);
+  box(g,  0,  0,960,10, 150,TEX.plaster);         // outer walls
+  box(g,  0,530,960,10, 150,TEX.plaster);
   g.covers.push({x:150,y:330,w:130,h:104});
   g.covers.push({x:560,y:190,w:150,h:104});
   g.covers.push({x:740,y:370,w:130,h:96});
   g.tarps = g.covers.map(c=>({...c, h:104}));
-  g.items.push({x:120,y:150, kind:'oar', taken:false});
-  g.infected.push(mkInfected(700,300,null));
+  g.items.push({x:120,y:150, kind:'oar',   taken:false});
+  g.items.push({x:390,y:110, kind:'knife', taken:false});
+  g.items.push({x:600,y:470, kind:'spear', taken:false});
+  g.infected.push(mkInfected(760,300,null));
+  g.infected.push(mkInfected(330,220,null));
+  g.infected.push(mkInfected(520,140,null,.88));
+  g.infected.push(mkInfected(820,470,null,.88));
   g.exit = {x:880,y:200,w:80,h:150, label:'مخرج السوق', locked:false};
 }
 
 function buildCorniche(g){
   g.P.x = 90; g.P.y = 430; g.P.a = -0.5;
-  g.fog='#04070a'; g.fogNear=30; g.fogFar=300; g.ambient=.045;
-  g.sky='night';
-  box(g,  0, 60,960,12, 46,'#6f7d82');            // seawall — pale concrete
-  box(g,250,230,130,30, 40,'#5d6b70');            // benches
-  box(g,600,340,130,30, 40,'#5d6b70');
-  box(g,430,120, 26,26,150,'#55636a');            // dead lamp post
-  box(g,150,300, 26,26,150,'#55636a');
-  scatter(g,380,31,0,80,960,540,'rgba(150,172,180,.42)');
+  g.fog='#04070a'; g.fogNear=30; g.fogFar=320; g.ambient=.045;
+  g.sky='night'; g.floor=TEX.tile; g.floorScale=.62;
+  box(g,  0, 60,960,12, 46,TEX.concrete);         // seawall
+  box(g,250,230,130,30, 40,TEX.concrete,.8);      // benches
+  box(g,600,340,130,30, 40,TEX.concrete,.8);
+  box(g,430,120, 26,26,150,TEX.concrete,.7);      // dead lamp posts
+  box(g,150,300, 26,26,150,TEX.concrete,.7);
+  box(g,820,380, 26,26,150,TEX.concrete,.7);
   g.covers.push({x:170,y:120,w:120,h:92});
   g.covers.push({x:690,y:150,w:130,h:96});
   g.covers.push({x:380,y:400,w:140,h:96});
   g.tarps = g.covers.map(c=>({...c, h:100}));
   g.sign = {x:770,y:160};
-  g.items.push({x:200,y:330, kind:'oar', taken:false});
+  g.items.push({x:220,y:340, kind:'spear', taken:false});
+  g.items.push({x:540,y:200, kind:'knife', taken:false});
   g.infected.push(mkInfected(720,260,strain));
+  g.infected.push(mkInfected(500,430,strain));
+  g.infected.push(mkInfected(860,150,strain));
+  g.infected.push(mkInfected(350,150,strain,.9));
+  g.infected.push(mkInfected(640,480,strain,.9));
   g.boat = {x:60,y:150};
   g.exit = {x:20,y:110,w:120,h:110, label:'القارب', locked:false};
 }
 
-function mkInfected(x,y,st){
+function mkInfected(x,y,st,scale){
+  const k = scale||1;
   const b = { x,y, r:11, hp:2, aggro:0, seen:false, watched:false,
-              speed:52, sense:120, hitCd:0, stagger:0, strain:st, ring:0,
-              home:{x,y}, wander:Math.random()*6.28, moan:0 };
-  if(st==='engage'){ b.hp=4; b.speed=48; }
-  if(st==='stealth'){ b.sense=210; b.speed=56; }
-  if(st==='flee'){ b.speed=92; }
+              speed:52*k, sense:120*k, hitCd:0, stagger:0, strain:st, ring:0,
+              home:{x,y}, wander:Math.random()*6.28, moan:0,
+              gait:Math.random()*6.28, lean:(Math.random()-.5)*.25 };
+  if(st==='engage'){ b.hp=4; b.speed=48*k; }
+  if(st==='stealth'){ b.sense=210*k; b.speed=56*k; }
+  if(st==='flee'){ b.speed=92*k; }
   return b;
 }
 
@@ -544,10 +717,14 @@ function update(dt){
   for(const it of g.items){
     if(it.taken) continue;
     if(Math.hypot(P.x-it.x,P.y-it.y) < 34){
-      it.taken=true; P.armed=true; g.flash=.5; beep(300,.08,.05);
+      it.taken=true; P.armed=true; P.weapon=WEAPONS[it.kind]||WEAPONS.oar;
+      P.pickup=1.2; g.flash=.5; beep(300,.08,.05);
       if(g.screen===1) g.exit.locked=false;
     }
   }
+  P.swing = Math.max(0,P.swing-dt);
+  P.atkCd = Math.max(0,P.atkCd-dt);
+  P.pickup = Math.max(0,P.pickup-dt);
 
   let nearest = 1e9;
   for(const z of g.infected){
@@ -572,6 +749,7 @@ function update(dt){
     if(z.watched) mul = (z.strain==='flee') ? .22 : .06;
     else if(z.seen) mul = 1.7;
 
+    z.gait += dt*(z.seen&&!z.watched ? 7.5 : 2.2);
     if(z.stagger<=0){
       if(z.seen || z.watched){
         const a=Math.atan2(P.y-z.y,P.x-z.x);
@@ -584,16 +762,19 @@ function update(dt){
       }
     }
 
-    if(d < P.r+z.r+6){
-      if(P.armed && z.hitCd<=0){
-        z.hp-=1; z.hitCd=.5; z.stagger=.34;
-        const a=Math.atan2(z.y-P.y,z.x-P.x);
-        z.x+=Math.cos(a)*20; z.y+=Math.sin(a)*20;
-        bump('engage',1.4); g.shake=5; beep(96,.1,.07);
-        if(z.hp<=0){ z.dead=true; g.flash=.32; }
-      } else if(!P.armed && P.iframe<=0){ damage(); }
-      if(P.armed && z.strain==='engage' && z.hitCd>.38 && P.iframe<=0) damage();
+    // reach decides everything: the spear kills before it can touch you
+    const wep = P.weapon || WEAPONS.none;
+    const strikeAt = P.r + z.r + wep.reach;
+    const facing = c.d>0 && Math.abs(c.s/Math.max(1,c.d)) < .55;
+    if(wep.dmg>0 && facing && d < strikeAt && P.atkCd<=0){
+      z.hp -= wep.dmg; P.atkCd = wep.cd; P.swing = wep.cd*.75;
+      z.stagger = .34; z.hitCd = .3;
+      const a=Math.atan2(z.y-P.y,z.x-P.x);
+      z.x+=Math.cos(a)*18; z.y+=Math.sin(a)*18;
+      bump('engage',1.2); g.shake=4.5; beep(96,.1,.07);
+      if(z.hp<=0){ z.dead=true; g.flash=.28; }
     }
+    if(d < P.r+z.r+5 && P.iframe<=0 && z.stagger<=0) damage();
 
     if(z.seen && !z.dead){
       const away = ((P.x-z.x)*ca + (P.y-z.y)*sa) * mv.f;
@@ -694,9 +875,14 @@ function markStep(n){
 }
 
 /* ---------------- render ---------------- */
+/* keep the floor cast affordable on weak phones: widen the sample step if we fall behind */
+let frameAvg=16;
 function loop(now){
   const dt=Math.min(.05,(now-last)/1000);
   last=now; t+=dt;
+  frameAvg += ((dt*1000)-frameAvg)*0.05;
+  if(frameAvg>30 && floorStep<4) floorStep++;
+  else if(frameAvg<19 && floorStep>2) floorStep--;
   if(running) update(dt);
   draw();
   raf=requestAnimationFrame(loop);
@@ -733,8 +919,7 @@ function draw(){
   if(g.shake>0) ctx.translate((Math.random()-.5)*g.shake,(Math.random()-.5)*g.shake);
 
   drawSky(g,hor);
-  drawGroundPlane(g,hor);
-  drawGroundMarks(g,hor);
+  drawGroundPlane(g,hor);          // the floor texture now carries all ground detail
 
   // depth-sorted geometry
   const items=[];
@@ -771,7 +956,7 @@ function draw(){
   for(const o of items){
     if(o.type==='wall') drawWall(g,o.w,o.a,o.b,hor);
     else if(o.type==='tarp') drawTarp(g,o.c,o.cam,hor);
-    else if(o.type==='oar') drawOar(g,o.cam,hor);
+    else if(o.type==='oar') drawOar(g,o.it,o.cam,hor);
     else if(o.type==='inf') drawInfected(g,o.z,o.cam,hor);
     else if(o.type==='sign') drawSign(g,o.cam,hor);
     else if(o.type==='exit') drawExit(g,o.cam,hor);
@@ -779,6 +964,7 @@ function draw(){
 
   ctx.restore();
 
+  drawViewModel(g);
   applyTorch(g);
   applyGrain(g);
   applySixthSense(g);
@@ -786,31 +972,85 @@ function draw(){
   drawHUD(g);
 }
 
+const STARS=(()=>{ const r=rng(137), a=[]; for(let i=0;i<110;i++) a.push([r(),r(),r()]); return a; })();
 function drawSky(g,hor){
+  const top=Math.ceil(hor)+1;
   if(g.sky==='beach'){
     const s=ctx.createLinearGradient(0,0,0,hor);
-    s.addColorStop(0,'#7c868b'); s.addColorStop(1,'#5b6468');
-    ctx.fillStyle=s;
+    s.addColorStop(0,'#78838a'); s.addColorStop(.62,'#6a757a'); s.addColorStop(1,'#5b6468');
+    ctx.fillStyle=s; ctx.fillRect(0,0,W,top);
+    // low overcast banding — keeps the sky from reading as flat paper
+    const drift=-g.P.a*FOCAL*.25;
+    for(let i=0;i<5;i++){
+      const y=hor*(.16+i*.15), h=hor*.10;
+      ctx.fillStyle=`rgba(${168-i*9},${176-i*9},${180-i*8},${.05+i*.022})`;
+      ctx.beginPath();
+      ctx.ellipse(((drift*(.3+i*.12))%(W*2)+W*2)%(W*2)-W*.5, y, W*.62, h, 0,0,6.28);
+      ctx.fill();
+    }
   } else if(g.sky==='market'){
     const s=ctx.createLinearGradient(0,0,0,hor);
-    s.addColorStop(0,'#080705'); s.addColorStop(1,'#191410');
-    ctx.fillStyle=s;
+    s.addColorStop(0,'#070604'); s.addColorStop(1,'#1c1610');
+    ctx.fillStyle=s; ctx.fillRect(0,0,W,top);
   } else {
-    ctx.fillStyle='#020406';
+    ctx.fillStyle='#020406'; ctx.fillRect(0,0,W,top);
+    const drift=-g.P.a*FOCAL*.5;
+    for(const st of STARS){
+      const x=((st[0]*W*2+drift)%(W*2)+(W*2))%(W*2)-W*.5;
+      if(x<0||x>W) continue;
+      const y=st[1]*hor*.88;
+      const tw=.18+st[2]*.5*(0.7+0.3*Math.sin(t*1.7+st[0]*50));
+      ctx.fillStyle=`rgba(198,214,222,${tw.toFixed(2)})`;
+      ctx.fillRect(x|0,y|0,1,1);
+    }
   }
-  ctx.fillRect(0,0,W,Math.ceil(hor)+1);
 }
 
+/* per-pixel floor casting — the single biggest realism win, and it is cheap
+   because the internal buffer is only 480x270 */
+let floorImg=null, floorStep=2;
 function drawGroundPlane(g,hor){
-  // the near floor is painted bright; the torch overlay is what carves it back
-  const s=ctx.createLinearGradient(0,hor,0,H);
-  s.addColorStop(0,g.fog);
-  if(g.screen===1){ s.addColorStop(.30,'#4a4038'); s.addColorStop(1,'#2e2721'); }
-  else if(g.screen===2){ s.addColorStop(.30,'#4e4132'); s.addColorStop(1,'#6a5942'); }
-  else { s.addColorStop(.26,'#1b2529'); s.addColorStop(1,'#4d5a60'); }
-  ctx.fillStyle=s;
-  ctx.fillRect(0,Math.floor(hor),W,H-Math.floor(hor)+1);
+  const y0=Math.max(0,Math.floor(hor));
+  const rows=H-y0;
+  if(rows<=0){ if(g.screen===1) drawSeaStrip(g,hor); return; }
+  if(!floorImg || floorImg.height!==rows) floorImg=ctx.createImageData(W,rows);
 
+  const px=floorImg.data;
+  const tex=g.floor, tw=tex.w, th=tex.h, td=tex.data, sc=g.floorScale;
+  const ca=Math.cos(g.P.a), sa=Math.sin(g.P.a);
+  const fogR=parseInt(g.fog.slice(1,3),16), fogG=parseInt(g.fog.slice(3,5),16), fogB=parseInt(g.fog.slice(5,7),16);
+  const st=floorStep;
+
+  for(let y=0;y<rows;y++){
+    const sy=y0+y;
+    const d=(CAMH*FOCAL)/Math.max(.0001,(sy-hor));
+    if(d>g.fogFar*1.35){                       // beyond sight: pure fog
+      for(let x=0;x<W;x++){
+        const i=(y*W+x)*4; px[i]=fogR; px[i+1]=fogG; px[i+2]=fogB; px[i+3]=255;
+      }
+      continue;
+    }
+    const k=Math.min(1,Math.max(0,(d-g.fogNear)/(g.fogFar-g.fogNear)));
+    const fall=Math.max(0,1-d/(g.fogFar*.9));
+    // world position at the centre of the view for this row
+    const wx0=g.P.x+ca*d, wy0=g.P.y+sa*d;
+    const rx=-sa*d/FOCAL, ry=ca*d/FOCAL;       // world step per screen pixel
+    for(let x=0;x<W;x+=st){
+      const off=x-HW;
+      const wx=wx0+rx*off, wy=wy0+ry*off;
+      let tu=((wx*sc)%tw+tw)%tw|0, tv=((wy*sc)%th+th)%th|0;
+      const ti=(tv*tw+tu)*4;
+      const cone=Math.max(0,1-Math.pow(Math.abs(off/ (FOCAL*.62)),1.7));
+      const lit=Math.min(1,g.ambient+cone*fall*g.lightJitter*1.5);
+      let r=td[ti]*lit, gg=td[ti+1]*lit, b=td[ti+2]*lit;
+      r+=(fogR-r)*k; gg+=(fogG-gg)*k; b+=(fogB-b)*k;
+      for(let q=0;q<st && x+q<W;q++){
+        const i=(y*W+x+q)*4;
+        px[i]=r; px[i+1]=gg; px[i+2]=b; px[i+3]=255;
+      }
+    }
+  }
+  ctx.putImageData(floorImg,0,y0);
   if(g.screen===1) drawSeaStrip(g,hor);
 }
 
@@ -833,54 +1073,56 @@ function drawSeaStrip(g,hor){
   ctx.globalAlpha=1;
 }
 
-function drawGroundMarks(g,hor){
-  for(const p of g.ground){
-    const cam=toCam(g,p.x,p.y);
-    if(cam.d<NEAR || cam.d>g.fogFar) continue;
-    const sx=HW+(cam.s/cam.d)*FOCAL;
-    if(sx<-8||sx>W+8) continue;
-    const sy=hor+(CAMH/cam.d)*FOCAL;
-    if(sy<hor||sy>H) continue;
-    const sz=Math.max(.6,p.s*FOCAL/cam.d*0.06);
-    const lit=Math.min(1,g.ambient+lightAt(g,cam)*1.1);
-    ctx.globalAlpha=Math.max(0,lit*(1-cam.d/g.fogFar));
-    ctx.fillStyle=p.c;
-    ctx.fillRect(sx,sy,sz,sz*.7);
-  }
-  ctx.globalAlpha=1;
-
-  if(g.screen===3){   // promenade tiling — the depth cue that sells the dark
-    ctx.lineWidth=1;
-    for(let gx=0; gx<=960; gx+=60) groundLine(g,gx,80,gx,540,hor,'rgba(150,170,176,.12)');
-    for(let gy=80; gy<=540; gy+=60) groundLine(g,0,gy,960,gy,hor,'rgba(150,170,176,.12)');
-  }
+/* everything standing on the ground gets a contact shadow, or it floats */
+function contactShadow(g,cam,hor,widthUnits,strength){
+  const sx=HW+(cam.s/cam.d)*FOCAL;
+  const sy=hor+(CAMH/cam.d)*FOCAL;
+  const rw=(widthUnits/cam.d)*FOCAL;
+  if(rw<.6) return;
+  ctx.save();
+  const grd=ctx.createRadialGradient(sx,sy,0,sx,sy,rw);
+  grd.addColorStop(0,`rgba(0,0,0,${strength})`);
+  grd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grd;
+  ctx.beginPath(); ctx.ellipse(sx,sy,rw,rw*.34,0,0,6.28); ctx.fill();
+  ctx.restore();
 }
 
-function groundLine(g,x1,y1,x2,y2,hor,col){
-  let a=toCam(g,x1,y1), b=toCam(g,x2,y2);
-  if(a.d<NEAR && b.d<NEAR) return;
-  if(a.d<NEAR){ const k=(NEAR-a.d)/(b.d-a.d); a={d:NEAR,s:a.s+(b.s-a.s)*k}; }
-  if(b.d<NEAR){ const k=(NEAR-b.d)/(a.d-b.d); b={d:NEAR,s:b.s+(a.s-b.s)*k}; }
-  const ax=HW+(a.s/a.d)*FOCAL, ay=hor+(CAMH/a.d)*FOCAL;
-  const bx=HW+(b.s/b.d)*FOCAL, by=hor+(CAMH/b.d)*FOCAL;
-  const md=(a.d+b.d)/2;
-  ctx.globalAlpha=Math.max(0,Math.min(1,(g.ambient+lightAt(g,{d:md,s:(a.s+b.s)/2})*1.2)*(1-md/g.fogFar)));
-  ctx.strokeStyle=col;
-  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
-  ctx.globalAlpha=1;
-}
+/* perspective-correct textured wall, two screen pixels at a time */
+const COL = 2;
+function drawWall(g,w,a0,b0,hor){
+  let a={d:a0.d,s:a0.s,u:0}, b={d:b0.d,s:b0.s,u:1};
+  if(a.d<NEAR){ const k=(NEAR-a.d)/(b.d-a.d); a={d:NEAR,s:a.s+(b.s-a.s)*k,u:a.u+(b.u-a.u)*k}; }
+  if(b.d<NEAR){ const k=(NEAR-b.d)/(a.d-b.d); b={d:NEAR,s:b.s+(a.s-b.s)*k,u:b.u+(a.u-b.u)*k}; }
+  let ax=HW+(a.s/a.d)*FOCAL, bx=HW+(b.s/b.d)*FOCAL;
+  if(bx<=ax) return;                                  // back face — never drawn
+  if(bx<0 || ax>W) return;
 
-function drawWall(g,w,a,b,hor){
-  if(a.d<NEAR){ const k=(NEAR-a.d)/(b.d-a.d); a={d:NEAR,s:a.s+(b.s-a.s)*k}; }
-  if(b.d<NEAR){ const k=(NEAR-b.d)/(a.d-b.d); b={d:NEAR,s:b.s+(a.s-b.s)*k}; }
-  const ax=HW+(a.s/a.d)*FOCAL, bx=HW+(b.s/b.d)*FOCAL;
-  if((ax<-40&&bx<-40)||(ax>W+40&&bx>W+40)) return;
-  const ayB=hor+(CAMH/a.d)*FOCAL, ayT=hor+((CAMH-w.h)/a.d)*FOCAL;
-  const byB=hor+(CAMH/b.d)*FOCAL, byT=hor+((CAMH-w.h)/b.d)*FOCAL;
-  ctx.fillStyle=shade(g,w.c,{d:(a.d+b.d)/2, s:(a.s+b.s)/2});
-  ctx.beginPath();
-  ctx.moveTo(ax,ayT); ctx.lineTo(bx,byT); ctx.lineTo(bx,byB); ctx.lineTo(ax,ayB);
-  ctx.closePath(); ctx.fill();
+  const tex=w.tex, tint=w.tint||1;
+  const segLen=Math.hypot(w.x2-w.x1,w.y2-w.y1);
+  const reps=Math.max(1,Math.round(segLen/42));       // texture metres, not stretch
+  const invA=1/a.d, invB=1/b.d;
+  const uA=a.u*invA,  uB=b.u*invB;
+
+  const x0=Math.max(0,Math.floor(ax)), x1=Math.min(W,Math.ceil(bx));
+  const fogR=parseInt(g.fog.slice(1,3),16), fogG=parseInt(g.fog.slice(3,5),16), fogB=parseInt(g.fog.slice(5,7),16);
+
+  for(let x=x0;x<x1;x+=COL){
+    const t=(x+COL/2-ax)/(bx-ax);
+    const inv=invA+(invB-invA)*t;
+    if(inv<=0) continue;
+    const d=1/inv;
+    const u=(uA+(uB-uA)*t)/inv;
+    const yB=hor+(CAMH/d)*FOCAL, yT=hor+((CAMH-w.h)/d)*FOCAL;
+    if(yB<0||yT>H) continue;
+    const tx=Math.min(tex.w-1,Math.max(0,((u*reps)%1)*tex.w|0));
+    ctx.drawImage(tex.cv, tx,0,1,tex.h, x,yT,COL,yB-yT);
+
+    const lit=Math.min(1, g.ambient + lightAt(g,{d,s:(x-HW)*d/FOCAL})*1.35) * tint;
+    if(lit<1){ ctx.fillStyle=`rgba(0,0,0,${(1-lit).toFixed(3)})`; ctx.fillRect(x,yT,COL,yB-yT); }
+    const k=Math.min(1,Math.max(0,(d-g.fogNear)/(g.fogFar-g.fogNear)));
+    if(k>.01){ ctx.fillStyle=`rgba(${fogR},${fogG},${fogB},${k.toFixed(3)})`; ctx.fillRect(x,yT,COL,yB-yT); }
+  }
 }
 
 function drawTarp(g,c,cam,hor){
@@ -904,47 +1146,112 @@ function billboard(g,cam,hor,wUnits,hUnits,lift){
   return {sx,yT,yB,w,h:yB-yT};
 }
 
-function drawOar(g,cam,hor){
-  const b=billboard(g,cam,hor,10,52,0);
-  const lit=Math.min(1,g.ambient+lightAt(g,cam)*1.4);
-  ctx.fillStyle=`rgba(182,168,143,${Math.max(.12,lit)})`;
-  ctx.fillRect(b.sx-b.w/2,b.yT,Math.max(1,b.w),b.h);
-  // reflective tape catches the torch — the only guidance the game gives
+function drawOar(g,it,cam,hor){
+  const kind=it.kind;
+  const hUnits = kind==='spear'?70 : kind==='knife'?16 : 54;
+  const b=billboard(g,cam,hor,10,hUnits,0);
+  const lit=Math.max(.14,Math.min(1,g.ambient+lightAt(g,cam)*1.5));
+  const bw=Math.max(1,b.w);
+  contactShadow(g,cam,hor,12,.45);
+
+  if(kind==='knife'){
+    ctx.fillStyle=`rgba(${(58*lit+10)|0},${(44*lit+8)|0},${(34*lit+8)|0},1)`;   // handle
+    ctx.fillRect(b.sx-bw*.5,b.yT+b.h*.55,bw,b.h*.45);
+    ctx.fillStyle=`rgba(${(196*lit+14)|0},${(208*lit+14)|0},${(212*lit+14)|0},1)`; // blade
+    ctx.beginPath();
+    ctx.moveTo(b.sx-bw*.45,b.yT+b.h*.55);
+    ctx.lineTo(b.sx,b.yT); ctx.lineTo(b.sx+bw*.45,b.yT+b.h*.55);
+    ctx.closePath(); ctx.fill();
+  } else if(kind==='spear'){
+    ctx.fillStyle=`rgba(${(128*lit+8)|0},${(104*lit+8)|0},${(70*lit+6)|0},1)`;   // shaft
+    ctx.fillRect(b.sx-bw*.28,b.yT+b.h*.16,Math.max(1,bw*.56),b.h*.84);
+    ctx.fillStyle=`rgba(${(190*lit+14)|0},${(200*lit+14)|0},${(204*lit+14)|0},1)`; // head
+    ctx.beginPath();
+    ctx.moveTo(b.sx-bw*.42,b.yT+b.h*.20);
+    ctx.lineTo(b.sx,b.yT); ctx.lineTo(b.sx+bw*.42,b.yT+b.h*.20);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle=`rgba(${(70*lit)|0},${(58*lit)|0},${(42*lit)|0},1)`;            // binding
+    ctx.fillRect(b.sx-bw*.30,b.yT+b.h*.24,Math.max(1,bw*.60),Math.max(1,b.h*.05));
+  } else {
+    ctx.fillStyle=`rgba(${(158*lit+8)|0},${(144*lit+8)|0},${(118*lit+6)|0},1)`;
+    ctx.fillRect(b.sx-bw*.30,b.yT+b.h*.26,Math.max(1,bw*.60),b.h*.74);
+    ctx.beginPath();                                                              // blade of the oar
+    ctx.ellipse(b.sx,b.yT+b.h*.16,Math.max(1,bw*.52),Math.max(1,b.h*.17),0,0,6.28);
+    ctx.fill();
+  }
+  // reflective tape — the only guidance the game ever gives
   const gl=Math.max(0,lightAt(g,cam));
   if(gl>0.03){
-    ctx.fillStyle=`rgba(230,240,242,${Math.min(.9,gl*1.6)})`;
-    ctx.fillRect(b.sx-b.w/2,b.yT+b.h*.18,Math.max(1,b.w),Math.max(1,b.h*.07));
+    ctx.fillStyle=`rgba(232,242,244,${Math.min(.92,gl*1.7)})`;
+    ctx.fillRect(b.sx-bw*.34,b.yT+b.h*.62,Math.max(1,bw*.68),Math.max(1,b.h*.06));
   }
 }
 
 function drawInfected(g,z,cam,hor){
-  const b=billboard(g,cam,hor,26,62,0);
+  const b=billboard(g,cam,hor,30,64,0);
   const lit=lightAt(g,cam);
-  const vis=Math.min(1,g.ambient*1.4+lit*1.6);
-  const sway=z.watched?0:Math.sin(t*4+z.x)*b.w*.06;
+  const vis=Math.min(1,g.ambient*1.5+lit*1.7);
+  const bw=Math.max(1.4,b.w), bh=b.h;
+  const moving = z.seen && !z.watched;
+  const step = moving ? Math.sin(z.gait)*1 : Math.sin(t*1.5+z.x)*.25;
+  const sway = z.watched ? 0 : step*bw*.06;
+  const cx=b.sx+sway;
 
-  // body
-  ctx.fillStyle=`rgba(${Math.round(52*vis+6)},${Math.round(44*vis+6)},${Math.round(40*vis+7)},1)`;
+  contactShadow(g,cam,hor,20,.55);
+
+  // an anatomical silhouette reads as a person; an ellipse never does
+  const skin=(m)=>`rgba(${((150*vis+6)*m)|0},${((136*vis+6)*m)|0},${((120*vis+7)*m)|0},1)`;
+  const cloth=(m)=>`rgba(${((64*vis+5)*m)|0},${((58*vis+5)*m)|0},${((52*vis+6)*m)|0},1)`;
+
+  // legs
+  ctx.fillStyle=cloth(.78);
+  ctx.fillRect(cx-bw*.20+step*bw*.07, b.yT+bh*.62, Math.max(1,bw*.15), bh*.38);
+  ctx.fillRect(cx+bw*.06-step*bw*.07, b.yT+bh*.62, Math.max(1,bw*.15), bh*.38);
+  // torso, hunched forward
+  ctx.fillStyle=cloth(1);
   ctx.beginPath();
-  ctx.ellipse(b.sx+sway,b.yT+b.h*.60,Math.max(1,b.w*.42),Math.max(1,b.h*.40),0,0,6.28);
+  ctx.moveTo(cx-bw*.30, b.yT+bh*.66);
+  ctx.lineTo(cx-bw*.26, b.yT+bh*.28);
+  ctx.lineTo(cx+bw*.26, b.yT+bh*.28);
+  ctx.lineTo(cx+bw*.30, b.yT+bh*.66);
+  ctx.closePath(); ctx.fill();
+  // arms hanging long
+  ctx.fillStyle=skin(.86);
+  ctx.fillRect(cx-bw*.40-step*bw*.05, b.yT+bh*.30, Math.max(1,bw*.11), bh*.36);
+  ctx.fillRect(cx+bw*.29+step*bw*.05, b.yT+bh*.30, Math.max(1,bw*.11), bh*.36);
+  // shoulders
+  ctx.fillStyle=cloth(1.12);
+  ctx.beginPath();
+  ctx.ellipse(cx, b.yT+bh*.29, Math.max(1,bw*.30), Math.max(1,bh*.06),0,0,6.28);
   ctx.fill();
-  if(z.strain==='engage'){
-    ctx.strokeStyle=`rgba(${Math.round(150*vis)},${Math.round(160*vis)},${Math.round(158*vis)},.85)`;
-    ctx.lineWidth=Math.max(1,b.w*.07); ctx.stroke();
+  // head, tilted
+  ctx.save();
+  ctx.translate(cx, b.yT+bh*.17); ctx.rotate(z.lean);
+  ctx.fillStyle=skin(1);
+  ctx.beginPath(); ctx.ellipse(0,0,Math.max(1,bw*.17),Math.max(1,bh*.11),0,0,6.28); ctx.fill();
+  ctx.fillStyle=`rgba(${(30*vis)|0},${(24*vis)|0},${(22*vis)|0},.85)`;   // open jaw
+  ctx.fillRect(-bw*.06, bh*.04, Math.max(1,bw*.12), Math.max(1,bh*.045));
+  ctx.restore();
+
+  if(z.strain==='engage'){                                 // hardened plates
+    ctx.strokeStyle=`rgba(${(168*vis)|0},${(176*vis)|0},${(172*vis)|0},.8)`;
+    ctx.lineWidth=Math.max(1,bw*.05);
+    ctx.beginPath();
+    ctx.ellipse(cx,b.yT+bh*.46,Math.max(1,bw*.31),Math.max(1,bh*.20),0,0,6.28);
+    ctx.stroke();
   }
-  // head
-  ctx.fillStyle=`rgba(${Math.round(150*vis+8)},${Math.round(140*vis+8)},${Math.round(128*vis+8)},1)`;
-  ctx.beginPath();
-  ctx.ellipse(b.sx+sway,b.yT+b.h*.17,Math.max(1,b.w*.24),Math.max(1,b.h*.15),0,0,6.28);
-  ctx.fill();
+  if(z.strain==='flee'){                                   // stretched limbs
+    ctx.fillStyle=skin(.7);
+    ctx.fillRect(cx-bw*.42, b.yT+bh*.62, Math.max(1,bw*.09), bh*.16);
+    ctx.fillRect(cx+bw*.33, b.yT+bh*.62, Math.max(1,bw*.09), bh*.16);
+  }
   // eyes: the only red that moves
   if(z.seen||z.watched){
-    const e=Math.max(.8,b.w*.07);
+    const e=Math.max(.9,bw*.06);
     ctx.fillStyle='#ff4a41';
-    ctx.fillRect(b.sx+sway-b.w*.12,b.yT+b.h*.15,e,e);
-    ctx.fillRect(b.sx+sway+b.w*.06,b.yT+b.h*.15,e,e);
+    ctx.fillRect(cx-bw*.10, b.yT+bh*.15, e,e);
+    ctx.fillRect(cx+bw*.05, b.yT+bh*.15, e,e);
   }
-  // echo rings read as a ground ripple
   if(z.strain==='stealth'){
     const rr=(z.ring*60)%z.sense;
     ctx.globalAlpha=Math.max(0,.22*(1-rr/z.sense));
@@ -982,6 +1289,64 @@ function drawExit(g,cam,hor){
   ctx.lineWidth=1; ctx.setLineDash([4,4]);
   ctx.strokeRect(b.sx-b.w/2,b.yT,b.w,b.h);
   ctx.setLineDash([]);
+}
+
+/* held weapon, low right — the anchor that makes the camera read as a body */
+function drawViewModel(g){
+  const P=g.P, wep=P.weapon;
+  if(!wep || wep.key==='none') return;
+  const swing = wep.cd>0 ? P.swing/wep.cd : 0;      // 0..0.75
+  const lunge = Math.sin(Math.min(1,swing/.75)*Math.PI);
+  const bx = W*0.72 - lunge*W*0.16 + g.P.bob*1.2;
+  const by = H*1.02 - lunge*H*0.16 + Math.sin(P.breath)*2.2 + Math.abs(g.P.bob)*1.4;
+  const lit = Math.min(1, g.ambient*1.2 + 0.72*g.lightJitter);
+  const tone=(r,gg,b,m)=>`rgba(${(r*lit*m)|0},${(gg*lit*m)|0},${(b*lit*m)|0},1)`;
+
+  ctx.save();
+  ctx.translate(bx,by);
+  ctx.rotate(-0.42 - lunge*0.30);
+
+  if(wep.key==='knife'){
+    ctx.fillStyle=tone(58,44,34,1);  ctx.fillRect(-7,-26,14,30);            // grip
+    ctx.fillStyle=tone(82,66,50,1);  ctx.fillRect(-9,-30,18,5);             // guard
+    ctx.fillStyle=tone(198,210,214,1);
+    ctx.beginPath(); ctx.moveTo(-6,-30); ctx.lineTo(0,-72); ctx.lineTo(6,-30);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle=tone(240,248,250,1);
+    ctx.beginPath(); ctx.moveTo(-2,-32); ctx.lineTo(0,-70); ctx.lineTo(2,-32);
+    ctx.closePath(); ctx.fill();
+  } else if(wep.key==='spear'){
+    ctx.fillStyle=tone(126,102,68,1); ctx.fillRect(-6,-108,12,150);         // shaft
+    ctx.fillStyle=tone(96,76,50,1);   ctx.fillRect(-6,-46,12,4);
+    ctx.fillStyle=tone(70,58,42,1);   ctx.fillRect(-7,-118,14,6);           // binding
+    ctx.fillStyle=tone(196,206,210,1);
+    ctx.beginPath(); ctx.moveTo(-9,-116); ctx.lineTo(0,-166); ctx.lineTo(9,-116);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle=tone(240,246,248,1);
+    ctx.beginPath(); ctx.moveTo(-3,-118); ctx.lineTo(0,-162); ctx.lineTo(3,-118);
+    ctx.closePath(); ctx.fill();
+  } else {
+    ctx.fillStyle=tone(152,138,112,1); ctx.fillRect(-7,-96,14,140);         // loom
+    ctx.fillStyle=tone(176,162,134,1);
+    ctx.beginPath(); ctx.ellipse(0,-112,15,26,0,0,6.28); ctx.fill();        // blade
+    ctx.fillStyle=tone(120,106,84,1); ctx.fillRect(-7,-92,14,3);
+  }
+
+  // the hand
+  ctx.fillStyle=tone(172,150,128,1);
+  ctx.beginPath(); ctx.ellipse(0,-6,13,17,0,0,6.28); ctx.fill();
+  ctx.fillStyle=tone(146,126,106,1);
+  ctx.fillRect(-13,-14,26,4);
+  ctx.restore();
+
+  if(P.pickup>0){
+    ctx.globalAlpha=Math.min(1,P.pickup);
+    ctx.fillStyle='rgba(217,208,188,.92)';
+    ctx.font='500 10px "IBM Plex Sans Arabic", sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText(wep.name, HW, H-16);
+    ctx.globalAlpha=1; ctx.textAlign='left';
+  }
 }
 
 /* torch + darkness, in screen space (we always look where the torch points) */
@@ -1048,13 +1413,18 @@ function drawHUD(g){
     ctx.fillStyle = i<P.hp ? '#c9302c' : 'rgba(201,48,44,.18)';
     ctx.fillRect(W-14-i*8,9,5,5);
   }
-  if(P.armed){ ctx.fillStyle='rgba(182,168,143,.8)'; ctx.fillRect(W-22,19,14,2); }
+  ctx.font='500 9px "IBM Plex Sans Arabic", sans-serif';
+  if(P.weapon && P.weapon.key!=='none'){
+    ctx.fillStyle='rgba(196,186,160,.72)';
+    ctx.textAlign='right';
+    ctx.fillText(P.weapon.name, W-10, 26);
+  }
   if(P.hidden){
     ctx.fillStyle='rgba(159,198,209,.8)';
-    ctx.font='500 9px "IBM Plex Sans Arabic", sans-serif';
     ctx.textAlign='left';
     ctx.fillText('مختبئ',9,16);
   }
+  ctx.textAlign='left';
 }
 
 /* ---------------- audio ---------------- */
