@@ -406,6 +406,48 @@ function buildTextures(){
     }
     grit(x,w,h,61,1100,.02,.1,true);
   });
+  // drowned flesh: grey-green, blotched, with veins showing through
+  TEX.flesh=makeTex(256,256,(x,w,h)=>{
+    x.fillStyle='#7e8574'; x.fillRect(0,0,w,h);
+    const r=rng(131);
+    for(let i=0;i<300;i++){
+      const g=r();
+      x.fillStyle = g>.72 ? `rgba(${(96+r()*30)|0},${(104+r()*26)|0},${(84+r()*22)|0},${.25+r()*.4})`
+                          : `rgba(${(58+r()*28)|0},${(64+r()*26)|0},${(52+r()*22)|0},${.2+r()*.4})`;
+      const s=8+r()*46;
+      x.beginPath(); x.ellipse(r()*w,r()*h,s,s*(.4+r()*.7),r()*3,0,6.28); x.fill();
+    }
+    for(let i=0;i<46;i++){                       // veins
+      x.strokeStyle=`rgba(${(52+r()*26)|0},${(40+r()*24)|0},${(58+r()*30)|0},${.16+r()*.26})`;
+      x.lineWidth=.8+r()*1.6;
+      x.beginPath();
+      let px=r()*w, py=r()*h;
+      x.moveTo(px,py);
+      for(let k=0;k<5;k++){ px+=(r()-.5)*50; py+=(r()-.5)*50; x.lineTo(px,py); }
+      x.stroke();
+    }
+    for(let i=0;i<24;i++){                       // wounds
+      x.fillStyle=`rgba(${(72+r()*44)|0},${(14+r()*14)|0},${(12+r()*12)|0},${.3+r()*.45})`;
+      const s=3+r()*13;
+      x.beginPath(); x.ellipse(r()*w,r()*h,s,s*(.35+r()*.5),r()*3,0,6.28); x.fill();
+    }
+    grit(x,w,h,137,600,.02,.12,true);
+  });
+  // what is left of their clothes
+  TEX.rag=makeTex(256,256,(x,w,h)=>{
+    x.fillStyle='#3a352c'; x.fillRect(0,0,w,h);
+    const r=rng(149);
+    for(let i=0;i<220;i++){
+      x.fillStyle=`rgba(${(30+r()*40)|0},${(28+r()*34)|0},${(24+r()*28)|0},${.3+r()*.5})`;
+      x.fillRect(r()*w,r()*h,8+r()*44,4+r()*26);
+    }
+    for(let i=0;i<30;i++){                       // dried blood down the front
+      x.fillStyle=`rgba(${(60+r()*40)|0},${(12+r()*12)|0},${(10+r()*10)|0},${.22+r()*.4})`;
+      x.fillRect(r()*w,r()*h,3+r()*10,14+r()*54);
+    }
+    grit(x,w,h,151,700,.02,.14,true);
+  });
+
   TEX.sand=makeTex(512,512,(x,w,h)=>{
     x.fillStyle='#6d6154'; x.fillRect(0,0,w,h);
     const r=rng(71);
@@ -507,11 +549,11 @@ function mkSurvivor(x,y,name){
 }
 function mkInfected(x,y,st,scale){
   const k=scale||1;
-  const b={x,y,r:11,hp:2,aggro:0,seen:false,watched:false,speed:76*k,sense:185*k,
+  const b={x,y,r:11,hp:2,aggro:0,seen:false,watched:false,speed:80*k,sense:240*k,
            hitCd:0,stagger:0,atk:0,strain:st,ring:0,home:{x,y},wander:Math.random()*6.28,
            moan:0,lunge:0,gait:Math.random()*6.28,lean:(Math.random()-.5)*.25};
-  if(st==='engage'){ b.hp=4; b.speed=70*k; }
-  if(st==='stealth'){ b.sense=290*k; b.speed=80*k; }
+  if(st==='engage'){ b.hp=4; b.speed=74*k; }
+  if(st==="stealth"){ b.sense=360*k; b.speed=84*k; }
   if(st==='flee'){ b.speed=124*k; }
   return b;
 }
@@ -551,6 +593,8 @@ function buildBeach(g){
   g.infected.push(mkInfected(1150,470,null,.80));
   g.infected.push(mkInfected(1340,830,null,.72));
   g.exit={x:1600,y:615,w:100,h:140,locked:true};
+  // the villagers marked the path inland: two posts and a storm lantern still burning
+  g.gate={x:1600,y:686};
 }
 function buildMarket(g){
   g.W=1800; g.H=1020;
@@ -767,15 +811,15 @@ function update(dt){
     const range=z.sense*noise;
     const canSense = z.strain==='stealth' ? d<range : (d<range && !P.hidden);
     const wasSeen=z.seen;
-    if(canSense) z.aggro=2.4; else z.aggro=Math.max(0,z.aggro-dt);
+    if(canSense) z.aggro=3.6; else z.aggro=Math.max(0,z.aggro-dt);
     z.seen=z.aggro>0;
     if(z.seen&&!wasSeen){ zShriek(d,panOf(g,z)); hush(.01,.55); }
 
     z.lunge=Math.max(0,z.lunge-dt);
     let mul=1;
-    if(z.watched) mul = d<150 ? .62 : (z.strain==='flee'?.40:.26);
-    else if(z.seen) mul=2.0;
-    if(z.seen&&d<120&&z.lunge<=0) z.lunge=1.5;
+    if(z.watched) mul = d<170 ? .80 : (z.strain==="flee"?.56:.44);
+    else if(z.seen) mul=2.15;
+    if(z.seen&&d<175&&z.lunge<=0) z.lunge=1.5;
     if(z.lunge>0.9) mul*=1.7;
 
     z.gait+=dt*(z.seen&&!z.watched?7.5:2.2);
@@ -837,10 +881,10 @@ function update(dt){
 
   let hunted=false,eyed=false;
   for(const z of g.infected){ if(z.seen) hunted=true; if(z.watched) eyed=true; }
-  let want=0.18;
-  if(eyed) want=Math.max(want,0.50);
-  if(hunted) want=Math.max(want,0.86);
-  want=Math.max(want,0.22+g.dread*0.72);
+  let want=0.70;
+  if(eyed) want=Math.max(want,0.84);
+  if(hunted) want=Math.max(want,1.0);
+  want=Math.max(want,0.72+g.dread*0.28);
   musicSet(dt,Math.min(1,want));
 
   g.lightJitter += ((1-Math.random()*g.dread*.5)-g.lightJitter)*Math.min(1,dt*9);
@@ -916,7 +960,7 @@ function showVeil(eyebrow,title,body,label,fn){
 /* ============================================================
    WebGL scene — real geometry, real lights, real shadows
    ============================================================ */
-let renderer,scene,camera,torch,hemi,ambientL,signLight,viewModel;
+let renderer,scene,camera,torch,hemi,ambientL,signLight,gateLight,viewModel;
 let dyn={infected:[],survivors:[],items:[]};
 let texCache=new Map();
 
@@ -965,6 +1009,64 @@ function disposeScene(){
 }
 
 /* a person, built from real solids so it reads from every angle */
+/* the infected: nothing about the proportions is right, and that is the point —
+   too tall, arms past the knees, head hung wrong, jaw that does not close */
+function makeInfected(){
+  const grp=new THREE.Group();
+  grp.rotation.order='YXZ';
+  const flesh=new THREE.MeshStandardMaterial({map:tex(TEX.flesh,1),bumpMap:tex(TEX.flesh,1),
+    bumpScale:.012,roughness:.98,color:0x9aa08c});
+  const rag=new THREE.MeshStandardMaterial({map:tex(TEX.rag,1),bumpMap:tex(TEX.rag,1),
+    bumpScale:.01,roughness:1,color:0x8e8a80});
+  const mk=(geo,mat,x,y,z,parent)=>{
+    const m=new THREE.Mesh(geo,mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true;
+    (parent||grp).add(m); return m;
+  };
+
+  // spine pivots so the whole upper body can hunch as one piece
+  const spine=new THREE.Group(); spine.position.set(0,1.02,0); grp.add(spine);
+
+  const torso=mk(new THREE.CylinderGeometry(.155,.195,.60,9),rag,0,.10,0,spine);
+  torso.scale.set(1,1,.72);                        // flattened, starved
+  const shoulders=mk(new THREE.SphereGeometry(.185,12,8),rag,0,.38,0,spine);
+  shoulders.scale.set(1.25,.52,.75);
+
+  const neck=new THREE.Group(); neck.position.set(0,.46,.03); spine.add(neck);
+  const head=mk(new THREE.SphereGeometry(.115,14,12),flesh,0,.06,0,neck);
+  head.scale.set(.86,1.22,.95);                    // long, narrow skull
+  const jaw=mk(new THREE.BoxGeometry(.10,.075,.085),flesh,0,-.045,.055,neck);
+  const mouth=mk(new THREE.BoxGeometry(.085,.055,.02),
+    new THREE.MeshBasicMaterial({color:0x0a0605}),0,-.015,.098,neck);
+
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xff2a1e});
+  const eg=new THREE.SphereGeometry(.0165,8,6);
+  const eL=mk(eg,eyeMat,-.040,.055,.094,neck);
+  const eR=mk(eg,eyeMat, .040,.055,.094,neck);
+  eL.castShadow=eR.castShadow=false;
+  // a faint bloom so the eyes carry through fog and darkness
+  const glowMat=new THREE.SpriteMaterial({color:0xff2a1e,opacity:.55,transparent:true,
+    blending:THREE.AdditiveBlending,depthWrite:false});
+  const glow=new THREE.Sprite(glowMat);
+  glow.scale.set(.30,.16,1); glow.position.set(0,.055,.10); neck.add(glow);
+
+  // arms hang past the knees
+  const armL=new THREE.Group(); armL.position.set(-.215,.36,0); spine.add(armL);
+  const armR=new THREE.Group(); armR.position.set( .215,.36,0); spine.add(armR);
+  mk(new THREE.CylinderGeometry(.042,.030,.80,7),flesh,0,-.40,0,armL);
+  mk(new THREE.CylinderGeometry(.042,.030,.80,7),flesh,0,-.40,0,armR);
+  mk(new THREE.SphereGeometry(.050,8,6),flesh,0,-.82,0,armL).scale.set(1,1.5,.6);
+  mk(new THREE.SphereGeometry(.050,8,6),flesh,0,-.82,0,armR).scale.set(1,1.5,.6);
+
+  const legL=new THREE.Group(); legL.position.set(-.095,1.00,0); grp.add(legL);
+  const legR=new THREE.Group(); legR.position.set( .095,1.00,0); grp.add(legR);
+  mk(new THREE.CylinderGeometry(.062,.040,1.00,7),rag,0,-.50,0,legL);
+  mk(new THREE.CylinderGeometry(.062,.040,1.00,7),rag,0,-.50,0,legR);
+
+  return {grp,spine,neck,head,jaw,mouth,armL,armR,legL,legR,eyeMat,glowMat,
+          twitch:0,nextTwitch:Math.random()*2,jawOpen:0,mats:[flesh,rag]};
+}
+
 function makeHuman(p){
   const grp=new THREE.Group();
   const skin=new THREE.MeshStandardMaterial({color:p.skin,roughness:.86});
@@ -1194,6 +1296,39 @@ function buildScene(g){
     }
   }
 
+  // the way inland — a lit marker you can steer by from the far end of the beach
+  if(g.gate){
+    const post=new THREE.CylinderGeometry(WX(10),WX(13),WX(230),8);
+    const postMat=new THREE.MeshStandardMaterial({color:0x5b4c3a,roughness:.95});
+    for(const off of [-WX(78),WX(78)]){
+      const p=new THREE.Mesh(post,postMat);
+      p.position.set(WX(g.gate.x)+off,WX(115),WZ(g.gate.y));
+      p.castShadow=true; scene.add(p);
+    }
+    const beam=new THREE.Mesh(new THREE.BoxGeometry(WX(180),WX(16),WX(16)),postMat);
+    beam.position.set(WX(g.gate.x),WX(222),WZ(g.gate.y));
+    beam.castShadow=true; scene.add(beam);
+    // cloth strips knotted to the beam, so it reads even unlit
+    for(let i=0;i<5;i++){
+      const s=new THREE.Mesh(new THREE.BoxGeometry(WX(11),WX(46+i*9),WX(3)),
+        new THREE.MeshStandardMaterial({color:i%2?0xb8443a:0xd8cdb6,roughness:1}));
+      s.position.set(WX(g.gate.x)-WX(64)+WX(32)*i,WX(196-i*4),WZ(g.gate.y)+.03);
+      scene.add(s);
+    }
+    const lampMat=new THREE.MeshBasicMaterial({color:0xffc871});
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(WX(16),10,8),lampMat);
+    lamp.position.set(WX(g.gate.x),WX(206),WZ(g.gate.y));
+    scene.add(lamp);
+    const halo=new THREE.Sprite(new THREE.SpriteMaterial({color:0xffb254,opacity:.7,
+      transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
+    halo.scale.set(2.6,2.6,1);
+    halo.position.copy(lamp.position);
+    scene.add(halo);
+    gateLight=new THREE.PointLight(0xffb254,2.6,16,2);
+    gateLight.position.set(WX(g.gate.x),WX(206),WZ(g.gate.y));
+    scene.add(gateLight);
+  } else gateLight=null;
+
   // the sign — the only saturated thing in the game
   if(g.sign){
     const grp=new THREE.Group();
@@ -1263,8 +1398,7 @@ function buildScene(g){
 
   // dynamic bodies
   for(const z of g.infected){
-    const h=makeHuman({skin:0x93887a,cloth:0x3c3330,eyes:true});
-    h.grp.rotation.order='YXZ';
+    const h=makeInfected();
     scene.add(h.grp); dyn.infected.push({z,h});
   }
   for(const s of g.survivors){
@@ -1312,6 +1446,7 @@ function syncScene(g,dt){
     torch.position.x = .16 + P.bob*.5;
   }
   if(signLight) signLight.intensity = 2.0+Math.sin(t*2.1)*.25;
+  if(gateLight) gateLight.intensity = 2.5+Math.sin(t*6.3)*.35+Math.sin(t*17.1)*.18;
 
   // infected
   for(const e of dyn.infected){
@@ -1320,13 +1455,42 @@ function syncScene(g,dt){
     h.grp.visible=true;
     h.grp.position.set(WX(z.x),0,WZ(z.y));
     h.grp.rotation.y = -(z.face!==undefined?z.face:0) - Math.PI/2;
-    const sw=Math.sin(z.gait)*.55;
-    h.legL.rotation.x= sw; h.legR.rotation.x=-sw;
-    h.armL.rotation.x=-sw*.7; h.armR.rotation.x= sw*.7;
-    h.torso.rotation.x = 0.22 + (z.seen?0.12:0);        // the hunch
-    h.head.rotation.z = z.lean;
-    h.grp.position.y = Math.abs(Math.sin(z.gait))*.03;
-    if(h.eyeMat) h.eyeMat.color.setHex(z.seen||z.watched?0xff3b30:0x5a1512);
+
+    const hunting = z.seen || z.watched;
+    const sw=Math.sin(z.gait)*(hunting?.78:.36);
+    // the legs swing wide and out of phase with the arms — a broken walk
+    h.legL.rotation.x= sw;        h.legR.rotation.x=-sw;
+    h.armL.rotation.x=-sw*.42-.18; h.armR.rotation.x= sw*.42-.18;
+    h.armL.rotation.z= .10+Math.sin(z.gait*1.7)*.07;
+    h.armR.rotation.z=-.10-Math.sin(z.gait*1.7)*.07;
+    // it folds further forward the closer it gets to you
+    h.spine.rotation.x = 0.30 + (hunting?0.34:0) + Math.sin(z.gait*2)*.03;
+
+    // involuntary spasms: the head snaps, then holds still too long
+    h.twitch-=dt;
+    if(h.twitch<=0){
+      h.twitch = hunting ? .25+Math.random()*.7 : .8+Math.random()*2.4;
+      h.jerkY=(Math.random()-.5)*(hunting?1.15:.55);
+      h.jerkZ=(Math.random()-.5)*(hunting?.75:.4);
+      h.jerkX=(Math.random()-.5)*.4;
+    }
+    const ease=Math.min(1,dt*12);
+    h.neck.rotation.y += ((h.jerkY||0)-h.neck.rotation.y)*ease;
+    h.neck.rotation.z += ((z.lean+(h.jerkZ||0))-h.neck.rotation.z)*ease;
+    h.neck.rotation.x += (((h.jerkX||0)+ (hunting?-.22:.10))-h.neck.rotation.x)*ease;
+
+    // the jaw hangs open and gapes wider when it has you
+    const wantJaw = hunting ? .55+Math.sin(t*9+z.x)*.22 : .18;
+    h.jawOpen += (wantJaw-h.jawOpen)*Math.min(1,dt*7);
+    h.jaw.rotation.x = h.jawOpen;
+    h.jaw.position.y = -.045 - h.jawOpen*.03;
+    h.mouth.scale.y = .6 + h.jawOpen*2.4;
+
+    h.grp.position.y = Math.abs(Math.sin(z.gait))*(hunting?.05:.025);
+
+    const hot = hunting;
+    h.eyeMat.color.setHex(hot?0xff2a1e:0x611611);
+    h.glowMat.opacity = hot ? .48+Math.sin(t*6+z.y)*.16 : .05;
   }
   // survivors
   for(const e of dyn.survivors){
@@ -1647,7 +1811,7 @@ function musicSet(dt,want){
   mus.level+=(want-mus.level)*Math.min(1,dt*1.6);
   if(mus.level>.06){
     musicStart(); musicInit();
-    mus.gain.gain.setTargetAtTime(Math.min(.55,mus.level*.55),AC.currentTime,.18);
+    mus.gain.gain.setTargetAtTime(Math.min(.92,mus.level*.92),AC.currentTime,.18);
   } else if(mus.playing) musicStop();
 }
 document.getElementById('sndBtn').addEventListener('click',e=>{
