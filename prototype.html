@@ -368,32 +368,33 @@ function scatter(g,n,seed,x0,y0,x1,y1,col){
 }
 
 function buildBeach(g){
-  g.P.x = 250; g.P.y = 420; g.P.a = -Math.PI/2;   // facing up the beach
-  g.fog='#5b6468'; g.fogNear=90; g.fogFar=430; g.ambient=.62;
+  // stand clear of the hull, sea on the left, village away to the right
+  g.P.x = 170; g.P.y = 440; g.P.a = 0;
+  g.fog='#697377'; g.fogNear=110; g.fogFar=560; g.ambient=.66;
   g.sky='beach';
-  box(g,120,250,270,96, 42,'#b9c4c4');            // near hull
-  box(g,560,150,300,88, 42,'#b9c4c4');            // far hull
-  scatter(g,320,7,0,270,960,540,'rgba(0,0,0,.42)');
-  g.items.push({x:470,y:400, kind:'oar', taken:false});
-  g.exit = {x:860,y:420,w:100,h:120, label:'الطريق إلى القرية', locked:true};
+  box(g,300,250,270,96, 52,'#c3cdcd');            // near hull
+  box(g,640,140,300,88, 52,'#c3cdcd');            // far hull
+  scatter(g,700,7,0,200,960,540,'rgba(14,11,9,.55)');
+  g.items.push({x:470,y:430, kind:'oar', taken:false});
+  g.exit = {x:850,y:400,w:110,h:140, label:'الطريق إلى القرية', locked:true};
 }
 
 function buildMarket(g){
   g.P.x = 70; g.P.y = 270; g.P.a = 0;
-  g.fog='#14100d'; g.fogNear=50; g.fogFar=300; g.ambient=.22;
+  g.fog='#14100d'; g.fogNear=50; g.fogFar=360; g.ambient=.16;
   g.sky='market';
-  // stall rows make real aisles — claustrophobia is free in first person
-  box(g,200, 60,70,70, 64,'#4a3d30');
-  box(g,200,150,70,70, 64,'#4a3d30');
-  box(g,200,330,70,70, 64,'#4a3d30');
-  box(g,430,290,70,70, 64,'#4a3d30');
-  box(g,500,290,70,70, 64,'#4a3d30');
-  box(g,660,100,70,70, 64,'#4a3d30');
-  box(g,660,190,70,70, 64,'#4a3d30');
-  box(g,330,430,150,50, 50,'#413528');
-  box(g,  0,  0,960,10, 130,'#231c16');           // outer walls
-  box(g,  0,530,960,10, 130,'#231c16');
-  scatter(g,180,19,0,0,960,540,'rgba(0,0,0,.5)');
+  // materials stay mid-tone; the dark comes from the torch, never from the paint
+  box(g,200, 60,70,70, 64,'#9c8264');
+  box(g,200,150,70,70, 64,'#9c8264');
+  box(g,200,330,70,70, 64,'#9c8264');
+  box(g,430,290,70,70, 64,'#9c8264');
+  box(g,500,290,70,70, 64,'#9c8264');
+  box(g,660,100,70,70, 64,'#9c8264');
+  box(g,660,190,70,70, 64,'#9c8264');
+  box(g,330,430,150,50, 50,'#8a7256');
+  box(g,  0,  0,960,10, 130,'#6d5d49');           // outer walls
+  box(g,  0,530,960,10, 130,'#6d5d49');
+  scatter(g,420,19,0,0,960,540,'rgba(120,102,80,.5)');
   g.covers.push({x:150,y:330,w:130,h:104});
   g.covers.push({x:560,y:190,w:150,h:104});
   g.covers.push({x:740,y:370,w:130,h:96});
@@ -405,14 +406,14 @@ function buildMarket(g){
 
 function buildCorniche(g){
   g.P.x = 90; g.P.y = 430; g.P.a = -0.5;
-  g.fog='#04070a'; g.fogNear=30; g.fogFar=230; g.ambient=.02;
+  g.fog='#04070a'; g.fogNear=30; g.fogFar=300; g.ambient=.045;
   g.sky='night';
-  box(g,  0, 60,960,12, 46,'#0f181c');            // seawall
-  box(g,250,230,130,30, 40,'#111a1e');            // benches
-  box(g,600,340,130,30, 40,'#111a1e');
-  box(g,430,120, 26,26,150,'#0d1418');            // dead lamp post
-  box(g,150,300, 26,26,150,'#0d1418');
-  scatter(g,120,31,0,80,960,540,'rgba(90,110,116,.13)');
+  box(g,  0, 60,960,12, 46,'#6f7d82');            // seawall — pale concrete
+  box(g,250,230,130,30, 40,'#5d6b70');            // benches
+  box(g,600,340,130,30, 40,'#5d6b70');
+  box(g,430,120, 26,26,150,'#55636a');            // dead lamp post
+  box(g,150,300, 26,26,150,'#55636a');
+  scatter(g,380,31,0,80,960,540,'rgba(150,172,180,.42)');
   g.covers.push({x:170,y:120,w:120,h:92});
   g.covers.push({x:690,y:150,w:130,h:96});
   g.covers.push({x:380,y:400,w:140,h:96});
@@ -801,13 +802,35 @@ function drawSky(g,hor){
 }
 
 function drawGroundPlane(g,hor){
+  // the near floor is painted bright; the torch overlay is what carves it back
   const s=ctx.createLinearGradient(0,hor,0,H);
   s.addColorStop(0,g.fog);
-  if(g.screen===1){ s.addColorStop(.28,'#3a332c'); s.addColorStop(1,'#241f1b'); }
-  else if(g.screen===2){ s.addColorStop(.30,'#231c15'); s.addColorStop(1,'#140f0b'); }
-  else { s.addColorStop(.30,'#080d10'); s.addColorStop(1,'#04070a'); }
+  if(g.screen===1){ s.addColorStop(.30,'#4a4038'); s.addColorStop(1,'#2e2721'); }
+  else if(g.screen===2){ s.addColorStop(.30,'#4e4132'); s.addColorStop(1,'#6a5942'); }
+  else { s.addColorStop(.26,'#1b2529'); s.addColorStop(1,'#4d5a60'); }
   ctx.fillStyle=s;
   ctx.fillRect(0,Math.floor(hor),W,H-Math.floor(hor)+1);
+
+  if(g.screen===1) drawSeaStrip(g,hor);
+}
+
+/* distant water sits right on the horizon — the beach's far edge */
+function drawSeaStrip(g,hor){
+  const h=13;
+  const s=ctx.createLinearGradient(0,hor-h,0,hor+2);
+  s.addColorStop(0,'#46585f'); s.addColorStop(1,'#5e696d');
+  ctx.fillStyle=s;
+  ctx.fillRect(0,hor-h,W,h+2);
+  ctx.strokeStyle='rgba(222,232,234,.34)'; ctx.lineWidth=1;
+  for(let i=0;i<3;i++){
+    ctx.beginPath();
+    for(let x=0;x<=W;x+=8){
+      const y=hor-h+3+i*3.6+Math.sin(x*.05+t*(.6+i*.3)+i)*1.1;
+      x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.globalAlpha=.30+i*.16; ctx.stroke();
+  }
+  ctx.globalAlpha=1;
 }
 
 function drawGroundMarks(g,hor){
@@ -964,22 +987,27 @@ function drawExit(g,cam,hor){
 /* torch + darkness, in screen space (we always look where the torch points) */
 function applyTorch(g){
   const hor=horizon(g);
-  const cx=HW, cy=hor+8;
-  const dark = g.screen===3 ? .985 : (g.screen===2 ? .90 : .46);
-  const reach = (g.screen===3 ? 1 : g.screen===2 ? 1.25 : 1.9) * g.lightJitter;
+  const cx=HW, cy=hor+34;                       // the beam lands on the floor ahead
+  const dark = g.screen===3 ? .97 : (g.screen===2 ? .86 : .40);
+  const reach = (g.screen===3 ? .92 : g.screen===2 ? 1.15 : 1.8) * g.lightJitter;
 
-  const grd=ctx.createRadialGradient(cx,cy,4,cx,cy,W*0.62*reach);
+  // squashed vertically so it reads as a cone hitting the ground, not a bubble
+  ctx.save();
+  ctx.translate(cx,cy); ctx.scale(1,0.62); ctx.translate(-cx,-cy);
+  const R=W*0.70*reach;
+  const grd=ctx.createRadialGradient(cx,cy,R*.06,cx,cy,R);
   grd.addColorStop(0,'rgba(0,0,0,0)');
-  grd.addColorStop(.34,`rgba(2,4,6,${dark*.34})`);
-  grd.addColorStop(.70,`rgba(2,4,6,${dark*.82})`);
+  grd.addColorStop(.40,`rgba(2,4,6,${dark*.26})`);
+  grd.addColorStop(.74,`rgba(2,4,6,${dark*.78})`);
   grd.addColorStop(1,`rgba(2,4,6,${dark})`);
   ctx.fillStyle=grd;
-  ctx.fillRect(0,0,W,H);
+  ctx.fillRect(-W,-H,W*3,H*3);
+  ctx.restore();
 
   // vignette, reddening with dread
-  const v=ctx.createRadialGradient(cx,HH,H*.25,cx,HH,H*.95);
+  const v=ctx.createRadialGradient(cx,HH,H*.30,cx,HH,H*1.05);
   v.addColorStop(0,'rgba(0,0,0,0)');
-  v.addColorStop(1,`rgba(${Math.round(40+90*g.dread)},6,6,${.55+.25*g.dread})`);
+  v.addColorStop(1,`rgba(${Math.round(34+96*g.dread)},5,5,${.40+.30*g.dread})`);
   ctx.fillStyle=v;
   ctx.fillRect(0,0,W,H);
 }
