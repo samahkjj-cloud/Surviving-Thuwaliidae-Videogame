@@ -339,7 +339,7 @@ button{font-family:inherit}
         <span class="tk big">THUWAL<span class="r">II</span>DAE</span>
       </div>
       <button class="skip" id="skipBtn">تخطّي</button>
-      <p class="sndhint">شغّل «الصوت» بالأسفل — نصف الرعب في السمع</p>
+      <p class="sndhint">الصوت يعمل — نصف الرعب في السمع</p>
     </div>
 
     <div class="intro outro" id="outro" hidden>
@@ -1679,7 +1679,9 @@ function updateHUD(){
 /* ============================================================
    audio (unchanged: everything synthesised)
    ============================================================ */
-let AC=null,master=null,seaGain=null,on=false,hbPhase=0,NOISE=null;
+/* sound is on by default; browsers still forbid any audio before the first
+   gesture, so it arms itself on whatever the player touches first */
+let AC=null,master=null,seaGain=null,on=true,hbPhase=0,NOISE=null,armed=false;
 function audio(){
   if(AC) return AC;
   AC=new (window.AudioContext||window.webkitAudioContext)();
@@ -1914,10 +1916,25 @@ function musicSet(dt,want){
     mus.gain.gain.setTargetAtTime(Math.min(.92,mus.level*.92),AC.currentTime,.18);
   } else if(mus.playing) musicStop();
 }
-document.getElementById('sndBtn').addEventListener('click',e=>{
+const sndBtn=document.getElementById('sndBtn');
+sndBtn.setAttribute('aria-pressed','true');
+
+function armAudio(){
+  if(armed) return;
+  armed=true;
+  audio();
+  const go=()=>{ if(on&&seaGain) seaGain.gain.setTargetAtTime(.055,AC.currentTime,.5); };
+  const p=AC.resume();
+  if(p&&p.then) p.then(go,go); else go();
+}
+// whatever they touch first — the skip button, the start button, a key — starts it
+['pointerdown','keydown','touchstart'].forEach(ev=>
+  addEventListener(ev,armAudio,{passive:true}));
+
+sndBtn.addEventListener('click',e=>{
   on=!on;
   e.currentTarget.setAttribute('aria-pressed',String(on));
-  if(on){ audio(); AC.resume(); seaGain.gain.setTargetAtTime(.055,AC.currentTime,.5); }
+  if(on){ armAudio(); if(AC){ AC.resume(); seaGain.gain.setTargetAtTime(.055,AC.currentTime,.5); } }
   else { if(seaGain) seaGain.gain.setTargetAtTime(0,AC.currentTime,.2); musicStop(); }
 });
 
