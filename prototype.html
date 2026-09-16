@@ -671,7 +671,11 @@ addEventListener('keydown', e=>{
 addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
 
 stage.addEventListener('pointerdown', e=>{
+  // never capture over the veil or its button: capturing here would retarget the
+  // pointer to the stage and the button would never receive a click at all.
+  if(!running || e.target.closest('button')) return;
   stage.setPointerCapture(e.pointerId);
+  stage.focus({preventScroll:true});
   const r = stage.getBoundingClientRect();
   pointer = { ox:e.clientX-r.left, oy:e.clientY-r.top, x:e.clientX-r.left, y:e.clientY-r.top };
 });
