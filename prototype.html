@@ -10,7 +10,8 @@
   html,body{margin:0}
   img{max-width:100%}
   [hidden]{display:none!important}
-</style><title>Surviving Thuwaliidae</title>
+</style>
+<title>Surviving Thuwaliidae</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600&family=Amiri:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -970,24 +971,51 @@ function buildScene(g){
     scene.add(m);
   }
 
-  // boats — extruded hull outline, not a crate
-  for(const b of g.boats){
-    const shape=new THREE.Shape();
-    const N=22;
-    for(let i=0;i<=N;i++){
-      const u=i/N*Math.PI*2;
-      const c=Math.cos(u), s=Math.sin(u);
-      const taper=.55+.45*(1-Math.max(0,c));
-      const x=c*WX(b.len)/2, y=s*WX(b.beam)/2*taper;
-      i?shape.lineTo(x,y):shape.moveTo(x,y);
+  // boats: a real hull outline with an open interior, so walking past one reads
+  // as a boat rather than a drum
+  const HULL=[                       // normalised half-outline, bow first
+    [ .50,.000],[ .47,.075],[ .40,.165],[ .28,.245],[ .12,.290],
+    [-.06,.300],[-.24,.292],[-.38,.268],[-.47,.238],[-.50,.215]
+  ];
+  function hullPath(sx,sy,inset){
+    const p=new THREE.Path? new THREE.Shape():new THREE.Shape();
+    const pts=[];
+    for(const q of HULL) pts.push([q[0]*sx*(1-inset*.10), q[1]*sy*(1-inset)]);
+    for(let i=HULL.length-1;i>=0;i--){
+      const q=HULL[i];
+      pts.push([q[0]*sx*(1-inset*.10), -q[1]*sy*(1-inset)]);
     }
-    const geo=new THREE.ExtrudeGeometry(shape,{depth:WX(46),bevelEnabled:true,bevelThickness:.05,bevelSize:.05,bevelSegments:2});
-    const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({map:tex(TEX.hull,2),roughness:.62}));
-    m.rotation.x=-Math.PI/2;
-    m.rotation.z=-b.rot;
+    pts.forEach((q,i)=> i?p.lineTo(q[0],q[1]):p.moveTo(q[0],q[1]));
+    p.closePath();
+    return p;
+  }
+  for(const b of g.boats){
+    const sx=WX(b.len), sy=WX(b.beam);
+    const shape=hullPath(sx,sy,0);
+    const hole=hullPath(sx,sy,0.22);
+    shape.holes.push(hole);
+    const geo=new THREE.ExtrudeGeometry(shape,{depth:WX(50),bevelEnabled:true,
+      bevelThickness:.035,bevelSize:.03,bevelSegments:2});
+    const mat=new THREE.MeshStandardMaterial({map:tex(TEX.hull,3),bumpMap:tex(TEX.hull,3),
+      bumpScale:.02,roughness:.55,color:0xbcc4c4});
+    const m=new THREE.Mesh(geo,mat);
+    m.rotation.x=-Math.PI/2; m.rotation.z=-b.rot;
     m.position.set(WX(b.cx),0,WZ(b.cy));
     m.castShadow=true; m.receiveShadow=true;
     scene.add(m);
+    // the sole inside, plus two thwarts
+    const sole=new THREE.Mesh(new THREE.PlaneGeometry(sx*.82,sy*.52),
+      new THREE.MeshStandardMaterial({color:0x7d8e92,roughness:.9}));
+    sole.rotation.x=-Math.PI/2; sole.rotation.z=-b.rot;
+    sole.position.set(WX(b.cx),WX(12),WZ(b.cy));
+    sole.receiveShadow=true; scene.add(sole);
+    for(const o of [-0.16,0.16]){
+      const th=new THREE.Mesh(new THREE.BoxGeometry(sx*.09,WX(7),sy*.62),
+        new THREE.MeshStandardMaterial({color:0x8e8371,roughness:.95}));
+      th.position.set(WX(b.cx)+Math.cos(-b.rot)*sx*o, WX(44), WZ(b.cy)+Math.sin(-b.rot)*sx*o);
+      th.rotation.y=-b.rot;
+      th.castShadow=true; scene.add(th);
+    }
   }
 
   // shelter sheets over the cover zones
