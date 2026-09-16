@@ -612,7 +612,8 @@ let strain = null;
 
 /* ---------------- level construction ---------------- */
 function buildBeach(g){
-  g.player.x = 232; g.player.y = 330;
+  // just clear of the near hull — as if you had only now climbed out of it
+  g.player.x = 232; g.player.y = 398;
   // two beached hulls, matching the reference photo
   g.obstacles.push({x:120,y:250,w:270,h:96, kind:'hull', tilt:-.06});
   g.obstacles.push({x:560,y:150,w:300,h:88, kind:'hull', tilt:.05});
@@ -712,10 +713,13 @@ function hitsRect(cx,cy,r,o){
 function inRect(cx,cy,o){ return cx>o.x && cx<o.x+o.w && cy>o.y && cy<o.y+o.h; }
 
 function moveEntity(e, dx, dy, obstacles){
+  // if already overlapping something, never block the move — otherwise an entity
+  // that starts or gets knocked inside geometry is trapped for good.
+  const stuck = obstacles.some(o=>hitsRect(e.x,e.y,e.r,o));
   e.x += dx;
-  for(const o of obstacles) if(hitsRect(e.x,e.y,e.r,o)) { e.x -= dx; break; }
+  if(!stuck) for(const o of obstacles) if(hitsRect(e.x,e.y,e.r,o)) { e.x -= dx; break; }
   e.y += dy;
-  for(const o of obstacles) if(hitsRect(e.x,e.y,e.r,o)) { e.y -= dy; break; }
+  if(!stuck) for(const o of obstacles) if(hitsRect(e.x,e.y,e.r,o)) { e.y -= dy; break; }
   e.x = Math.max(e.r, Math.min(W-e.r, e.x));
   e.y = Math.max(e.r, Math.min(H-e.r, e.y));
 }
