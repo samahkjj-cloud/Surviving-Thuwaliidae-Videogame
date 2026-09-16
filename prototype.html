@@ -82,14 +82,14 @@
 body{background:var(--void);color:var(--text);font-family:var(--ui);font-weight:300;margin:0;line-height:1.6}
 
 .shell{direction:rtl;max-width:1060px;margin:0 auto;padding-inline:20px;padding-block:24px 48px}
-.masthead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.masthead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:14px;max-width:760px;margin-inline:auto}
 h1{font-family:var(--display);font-weight:700;font-size:clamp(22px,4.4vw,34px);
    letter-spacing:.055em;line-height:1.05;margin:0;color:#ffffff;direction:ltr}
 h1 .r{color:var(--warn)}
 .byline{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--faint);direction:ltr;text-transform:uppercase}
 svg.defs{position:absolute;width:0;height:0;overflow:hidden}
 
-.stage{position:relative;width:100%;aspect-ratio:16/9;background:#000;
+.stage{position:relative;width:100%;max-width:760px;margin:0 auto;aspect-ratio:16/9;background:#000;
        border:1px solid var(--frame);overflow:hidden;touch-action:none;cursor:crosshair}
 .stage:focus-visible{outline:2px solid var(--hull);outline-offset:2px}
 canvas#cv{display:block;width:100%;height:100%}
@@ -160,9 +160,11 @@ button{font-family:inherit}
 .intro .titlecard.show{opacity:1;transition:opacity 1.1s ease}
 .intro .tk{font-family:var(--display);font-weight:400;letter-spacing:.30em;font-size:clamp(11px,2vw,15px);
   color:#7d9aa3;direction:ltr;text-transform:uppercase}
-.intro .tk.big{font-family:var(--smear);font-weight:400;letter-spacing:.01em;text-transform:none;
-  font-size:clamp(28px,7vw,56px);color:#d8d0bd;
-  text-shadow:2px 2px 0 rgba(142,31,24,.62), -2px 1px 0 rgba(142,31,24,.34), 0 0 40px rgba(201,48,44,.22)}
+/* the title keeps the original geometric kufic — it is the one thing that stays steady */
+.intro .tk.big{font-family:var(--display);font-weight:700;letter-spacing:.055em;text-transform:none;
+  font-size:clamp(26px,6.4vw,50px);color:#ffffff;
+  text-shadow:0 0 38px rgba(255,255,255,.18)}
+.intro .tk.big .r{color:var(--warn)}
 .intro .skip{position:absolute;bottom:12px;inset-inline-end:14px;background:rgba(8,12,15,.6);color:var(--dim);
   border:1px solid var(--line);border-radius:2px;padding:6px 13px;font-size:11.5px;cursor:pointer}
 .intro .skip:hover{color:var(--text);border-color:var(--faint)}
@@ -180,7 +182,7 @@ button{font-family:inherit}
 .wn-s{font-family:var(--hand);font-size:clamp(13px,2.2vw,16px);color:#3a2f24;letter-spacing:.02em}
 .whatsnext .btn{margin-top:12px}
 
-.bar{display:flex;gap:9px;justify-content:flex-end;padding-top:12px;flex-wrap:wrap}
+.bar{display:flex;gap:9px;justify-content:flex-end;padding-top:12px;flex-wrap:wrap;max-width:760px;margin:0 auto}
 .tog{font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);
   padding:6px 14px;border-radius:2px;cursor:pointer;transition:color .15s ease,border-color .15s ease}
 .tog:hover{color:var(--text);border-color:var(--faint)}
@@ -249,7 +251,7 @@ button{font-family:inherit}
   </header>
 
   <div class="stage" id="stage" tabindex="0" role="application"
-       aria-label="نموذج اللعبة بمنظور أول — تقدّم بـ W، التفت بالأسهم، أو اسحب بإصبعك">
+       aria-label="نموذج اللعبة بمنظور أول — تقدّم بـ W، التفت بالأسهم، اقفز بالمسافة، أو اسحب بإصبعك">
     <canvas id="cv"></canvas>
 
     <div class="fx" id="sense"></div>
@@ -274,7 +276,7 @@ button{font-family:inherit}
       </div>
       <div class="titlecard" id="titleCard">
         <span class="tk">Surviving</span>
-        <span class="tk big">Thuwaliidae</span>
+        <span class="tk big">THUWAL<span class="r">II</span>DAE</span>
       </div>
       <button class="skip" id="skipBtn">تخطّي</button>
       <p class="sndhint">شغّل «الصوت» بالأسفل — نصف الرعب في السمع</p>
@@ -485,6 +487,7 @@ function fresh(screen){
   const g={
     screen, over:false, W:960, H:540,
     P:{x:0,y:0,a:0,r:9,hp:4,iframe:0,hidden:false,bob:0,breath:0,step:0,
+       z:0,vz:0,air:false,
        weapon:WEAPONS.none,atkCd:0,swing:0,pickup:0},
     solids:[], covers:[], items:[], infected:[], survivors:[], boats:[],
     exit:null, sign:null, following:0, toast:'', toastT:0,
@@ -517,7 +520,18 @@ function buildBeach(g){
   g.W=1700; g.H=940;
   g.P.x=150; g.P.y=800; g.P.a=-0.5;
   g.sky='beach'; g.floor=TEX.sand; g.floorRepeat=64;
-  g.fogColor=0x59636a; g.fogDensity=.042; g.ambient=.34; g.torch=.85;
+  g.fogColor=0x8a5236; g.fogDensity=.030; g.ambient=.46; g.torch=.5;
+  g.sunset=true;
+  // your ship, on the reef where it died — the reason for everything that follows
+  g.wrecks=[
+    {x: 880,y:-430,len:1040,beam:320,rot: 0.16,tilt: 0.40,mast:true},
+    {x:1560,y:-620,len: 430,beam:250,rot:-0.55,tilt:-0.30,mast:false}
+  ];
+  // debris washes ashore in a line pointing back at the wreck
+  const DEB=[[300,300,58],[420,250,40],[560,330,52],[240,430,44],[700,240,62],
+             [880,300,48],[1020,250,54],[1180,340,42],[1320,270,58],[620,470,38],
+             [980,430,46],[1420,520,50],[380,610,42],[760,650,54]];
+  for(const d of DEB) box(g,d[0],d[1],d[2],d[2]*0.7,26+((d[0]*7)%22),TEX.plank,.8);
   boat(g, 470,560,270,98,-0.10);
   boat(g, 820,330,250,90, 0.14);
   boat(g,1180,690,265,95,-0.06);
@@ -664,8 +678,10 @@ function hitsRect(cx,cy,rad,o){
   return (cx-nx)**2+(cy-ny)**2 < rad*rad;
 }
 function inRect(cx,cy,o){ return cx>o.x&&cx<o.x+o.w&&cy>o.y&&cy<o.y+o.h; }
+/* anything shorter than your feet is no longer in the way — that is what jumping buys */
 function slide(g,e,dx,dy){
-  const rs=g.solids;
+  const foot=e.z||0;
+  const rs=g.solids.filter(o=>o.h>foot+4);
   const stuck=rs.some(o=>hitsRect(e.x,e.y,e.r,o));
   e.x+=dx;
   if(!stuck) for(const o of rs) if(hitsRect(e.x,e.y,e.r,o)){ e.x-=dx; break; }
@@ -691,8 +707,15 @@ function update(dt){
   const mv=readMove();
   const ca=Math.cos(P.a), sa=Math.sin(P.a);
   slide(g,P,(ca*mv.f-sa*mv.s)*108*dt,(sa*mv.f+ca*mv.s)*108*dt);
+  // jump
+  if((keys[' ']||keys['spacebar']) && !P.air){ P.vz=205; P.air=true; jumpGrunt(); }
+  if(P.air){
+    P.vz-=560*dt; P.z+=P.vz*dt;
+    if(P.z<=0){ P.z=0; P.vz=0; P.air=false; footstep(g.screen,.05,0); }
+  }
+
   const moving=Math.hypot(mv.f,mv.s)>.05;
-  P.bob = moving ? Math.sin(t*11)*.022 : P.bob*.9;
+  P.bob = (moving && !P.air) ? Math.sin(t*11)*.022 : P.bob*.9;
   P.breath += dt*(1.4+g.dread*2.2);
   P.iframe=Math.max(0,P.iframe-dt);
   P.hidden=g.covers.some(c=>inRect(P.x,P.y,c));
@@ -917,7 +940,7 @@ function initGL(){
   renderer.outputEncoding=THREE.sRGBEncoding;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure=0.82;
-  camera=new THREE.PerspectiveCamera(72,16/9,0.08,260);
+  camera=new THREE.PerspectiveCamera(60,16/9,0.08,420);
   resizeGL();
   addEventListener('resize',resizeGL);
 }
@@ -998,6 +1021,24 @@ function makeWeaponMesh(kind){
   return g;
 }
 
+/* a real hull outline, shared by the beached boats and by the wrecks */
+const HULL=[                       // normalised half-outline, bow first
+  [ .50,.000],[ .47,.075],[ .40,.165],[ .28,.245],[ .12,.290],
+  [-.06,.300],[-.24,.292],[-.38,.268],[-.47,.238],[-.50,.215]
+];
+function hullPath(sx,sy,inset){
+  const p=new THREE.Shape();
+  const pts=[];
+  for(const q of HULL) pts.push([q[0]*sx*(1-inset*.10), q[1]*sy*(1-inset)]);
+  for(let i=HULL.length-1;i>=0;i--){
+    const q=HULL[i];
+    pts.push([q[0]*sx*(1-inset*.10), -q[1]*sy*(1-inset)]);
+  }
+  pts.forEach((q,i)=> i?p.lineTo(q[0],q[1]):p.moveTo(q[0],q[1]));
+  p.closePath();
+  return p;
+}
+
 function safeBuild(g){
   try{ buildScene(g); }
   catch(err){ console.error("scene build failed:",err); }
@@ -1020,15 +1061,73 @@ function buildScene(g){
   floor.receiveShadow=true;
   scene.add(floor);
 
+  // sunset dome: painted once, wrapped around the world, lit by nothing
+  if(g.sunset){
+    const sky=makeTex(64,512,(x,w,h)=>{
+      const grd=x.createLinearGradient(0,0,0,h);
+      grd.addColorStop(0.00,'#131a33');
+      grd.addColorStop(0.34,'#3d3557');
+      grd.addColorStop(0.55,'#8a4f55');
+      grd.addColorStop(0.72,'#d9743d');
+      grd.addColorStop(0.86,'#f2a24a');
+      grd.addColorStop(1.00,'#ffd089');
+      x.fillStyle=grd; x.fillRect(0,0,w,h);
+      for(let i=0;i<40;i++){                       // haze banding near the water
+        const y=h*(0.62+Math.random()*0.36);
+        x.fillStyle=`rgba(${200+Math.random()*55|0},${120+Math.random()*70|0},90,${0.03+Math.random()*0.06})`;
+        x.fillRect(0,y,w,1+Math.random()*4);
+      }
+    });
+    const st=new THREE.CanvasTexture(sky);
+    st.wrapS=THREE.RepeatWrapping; st.repeat.set(1,1);
+    const dome=new THREE.Mesh(
+      new THREE.SphereGeometry(200,32,20),
+      new THREE.MeshBasicMaterial({map:st,side:THREE.BackSide,fog:false,depthWrite:false})
+    );
+    dome.position.set(WX(g.W)/2,0,WZ(g.H)/2);
+    scene.add(dome);
+    scene.background=null;
+  }
+
   // the sea, on the far side of the beach
   if(g.sky==='beach'||g.sky==='night'){
-    const sea=new THREE.Mesh(
-      new THREE.PlaneGeometry(WX(g.W)*3,120),
-      new THREE.MeshStandardMaterial({color:g.sky==='night'?0x0a1418:0x46585f,roughness:.35,metalness:.2})
-    );
+    const seaMat = g.sunset
+      ? new THREE.MeshStandardMaterial({color:0x7a4436,roughness:.18,metalness:.55,
+          emissive:0x2a1208,emissiveIntensity:.5})
+      : new THREE.MeshStandardMaterial({color:g.sky==='night'?0x0a1418:0x46585f,roughness:.35,metalness:.2});
+    const sea=new THREE.Mesh(new THREE.PlaneGeometry(WX(g.W)*4,200),seaMat);
     sea.rotation.x=-Math.PI/2;
-    sea.position.set(WX(g.W)/2,-0.12,-60+WZ(0));
+    sea.position.set(WX(g.W)/2,-0.12,-100+WZ(0));
     scene.add(sea);
+  }
+
+  // the wrecks: a broken hull heeled over on the reef, with a snapped mast
+  for(const w of (g.wrecks||[])){
+    const sx=WX(w.len), sy=WX(w.beam);
+    const hs=hullPath(sx,sy,0);
+    hs.holes.push(hullPath(sx,sy,0.18));
+    const geo=new THREE.ExtrudeGeometry(hs,{depth:WX(150),bevelEnabled:true,
+      bevelThickness:.08,bevelSize:.07,bevelSegments:2});
+    const mat=new THREE.MeshStandardMaterial({map:tex(TEX.hull,5),bumpMap:tex(TEX.hull,5),
+      bumpScale:.05,roughness:.78,color:0x6d6156});
+    const m=new THREE.Mesh(geo,mat);
+    m.rotation.x=-Math.PI/2; m.rotation.z=-w.rot;
+    m.rotation.y=w.tilt;                       // heeled over, not upright
+    m.position.set(WX(w.x),WX(6),WZ(w.y));
+    m.castShadow=true; m.receiveShadow=true;
+    scene.add(m);
+    if(w.mast){
+      const mast=new THREE.Mesh(new THREE.CylinderGeometry(WX(14),WX(20),WX(620),8),
+        new THREE.MeshStandardMaterial({color:0x4a4038,roughness:.9}));
+      mast.position.set(WX(w.x)+2.0,WX(210),WZ(w.y)+1.2);
+      mast.rotation.z=w.tilt+0.62;
+      mast.castShadow=true; scene.add(mast);
+      const spar=new THREE.Mesh(new THREE.CylinderGeometry(WX(9),WX(9),WX(330),6),
+        new THREE.MeshStandardMaterial({color:0x4a4038,roughness:.9}));
+      spar.position.set(WX(w.x)+3.4,WX(330),WZ(w.y)+2.1);
+      spar.rotation.z=Math.PI/2.3; spar.rotation.y=.4;
+      spar.castShadow=true; scene.add(spar);
+    }
   }
 
   // solids
@@ -1049,24 +1148,6 @@ function buildScene(g){
     scene.add(m);
   }
 
-  // boats: a real hull outline with an open interior, so walking past one reads
-  // as a boat rather than a drum
-  const HULL=[                       // normalised half-outline, bow first
-    [ .50,.000],[ .47,.075],[ .40,.165],[ .28,.245],[ .12,.290],
-    [-.06,.300],[-.24,.292],[-.38,.268],[-.47,.238],[-.50,.215]
-  ];
-  function hullPath(sx,sy,inset){
-    const p=new THREE.Shape();
-    const pts=[];
-    for(const q of HULL) pts.push([q[0]*sx*(1-inset*.10), q[1]*sy*(1-inset)]);
-    for(let i=HULL.length-1;i>=0;i--){
-      const q=HULL[i];
-      pts.push([q[0]*sx*(1-inset*.10), -q[1]*sy*(1-inset)]);
-    }
-    pts.forEach((q,i)=> i?p.lineTo(q[0],q[1]):p.moveTo(q[0],q[1]));
-    p.closePath();
-    return p;
-  }
   for(const b of g.boats){
     const sx=WX(b.len), sy=WX(b.beam);
     const shape=hullPath(sx,sy,0);
@@ -1141,14 +1222,30 @@ function buildScene(g){
   } else signLight=null;
 
   // lights
-  hemi=new THREE.HemisphereLight(0x9fb4bd,0x3a3229,g.ambient);
-  scene.add(hemi);
-  ambientL=new THREE.AmbientLight(0x5a6a72,g.ambient*.22);
-  scene.add(ambientL);
-  if(g.sky==='beach'){
-    const sun=new THREE.DirectionalLight(0xaab6ba,.30);
-    sun.position.set(WX(g.W)*.3,26,WZ(g.H)*.2);
-    scene.add(sun);
+  if(g.sunset){
+    hemi=new THREE.HemisphereLight(0xffb072,0x2e1f20,g.ambient);
+    scene.add(hemi);
+    ambientL=new THREE.AmbientLight(0x5a3a4e,g.ambient*.30);
+    scene.add(ambientL);
+    // the sun sits on the water behind the wreck, so everything throws a long shadow inland
+    const sun=new THREE.DirectionalLight(0xff8a3d,1.5);
+    sun.position.set(WX(g.W)*.55, 9, -52);
+    sun.target.position.set(WX(g.W)*.5, 0, WZ(g.H)*.7);
+    sun.castShadow=true;
+    sun.shadow.mapSize.width=1024; sun.shadow.mapSize.height=1024;
+    const sc=sun.shadow.camera;
+    sc.left=-34; sc.right=34; sc.top=34; sc.bottom=-34; sc.near=1; sc.far=140;
+    sun.shadow.bias=-0.0012;
+    scene.add(sun); scene.add(sun.target);
+    // a cool fill from the sky opposite, so shadows read blue against the amber
+    const fill=new THREE.DirectionalLight(0x5f7fb0,.30);
+    fill.position.set(-WX(g.W)*.2, 22, WZ(g.H)*1.2);
+    scene.add(fill);
+  } else {
+    hemi=new THREE.HemisphereLight(0x9fb4bd,0x3a3229,g.ambient);
+    scene.add(hemi);
+    ambientL=new THREE.AmbientLight(0x5a6a72,g.ambient*.22);
+    scene.add(ambientL);
   }
 
   torch=new THREE.SpotLight(0xfff0d6,g.torch*3.1,34,0.52,0.55,1.4);
@@ -1204,7 +1301,7 @@ function syncScene(g,dt){
   if(!scene) return;
   const P=g.P;
   // camera
-  camera.position.set(WX(P.x), (g.camH||EYE)+P.bob, WZ(P.y));
+  camera.position.set(WX(P.x), (g.camH||EYE)+P.bob+WX(P.z||0), WZ(P.y));
   camera.rotation.order='YXZ';
   camera.rotation.y = -P.a - Math.PI/2;
   camera.rotation.x = Math.sin(P.breath)*0.006;
@@ -1394,6 +1491,10 @@ function breathing(dt,exertion,dread,hurt){
     nburst({dur:.30,type:'bandpass',f0:260,f1:800,q:1.4,vol:lvl*1.05});
     if(dread>.45) nburst({dur:.14,type:'highpass',f0:1400,f1:2600,q:.8,vol:lvl*.5});
   }
+}
+function jumpGrunt(){
+  nburst({dur:.16,type:"bandpass",f0:600,f1:280,q:1.1,vol:.05,atk:.01});
+  vtone({type:"sawtooth",f0:160,f1:120,dur:.14,vol:.045,cut:600});
 }
 function gruntEffort(){
   vtone({type:'sawtooth',f0:150+Math.random()*30,f1:92,dur:.22,vol:.085,cut:760,q:1.2,wobble:6});
