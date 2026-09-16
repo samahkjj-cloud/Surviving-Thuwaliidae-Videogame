@@ -572,7 +572,7 @@ function buildBeach(g){
   g.W=1700; g.H=940;
   g.P.x=150; g.P.y=800; g.P.a=-0.5;
   g.sky='beach'; g.floor=TEX.sand; g.floorRepeat=64;
-  g.fogColor=0x8a5236; g.fogDensity=.030; g.ambient=.46; g.torch=.5;
+  g.fogColor=0x6d3f2e; g.fogDensity=.019; g.ambient=.34; g.torch=.5;
   g.sunset=true;
   // your ship, on the reef where it died — the reason for everything that follows
   g.wrecks=[
@@ -1330,11 +1330,11 @@ function buildScene(g){
     lamp.position.set(WX(g.gate.x),WX(206),WZ(g.gate.y));
     scene.add(lamp);
     const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:tex(TEX.glow,1),color:0xffb254,opacity:.7,
-      transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
-    halo.scale.set(2.6,2.6,1);
+      transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false,opacity:.95}));
+    halo.scale.set(5.2,5.2,1);
     halo.position.copy(lamp.position);
     scene.add(halo);
-    gateLight=new THREE.PointLight(0xffb254,2.6,16,2);
+    gateLight=new THREE.PointLight(0xffb254,4.2,30,2);
     gateLight.position.set(WX(g.gate.x),WX(206),WZ(g.gate.y));
     scene.add(gateLight);
   } else gateLight=null;
@@ -1373,7 +1373,7 @@ function buildScene(g){
     ambientL=new THREE.AmbientLight(0x5a3a4e,g.ambient*.30);
     scene.add(ambientL);
     // the sun sits on the water behind the wreck, so everything throws a long shadow inland
-    const sun=new THREE.DirectionalLight(0xff8a3d,1.5);
+    const sun=new THREE.DirectionalLight(0xff8a3d,2.1);
     sun.position.set(WX(g.W)*.55, 9, -52);
     sun.target.position.set(WX(g.W)*.5, 0, WZ(g.H)*.7);
     sun.castShadow=true;
@@ -1456,7 +1456,7 @@ function syncScene(g,dt){
     torch.position.x = .16 + P.bob*.5;
   }
   if(signLight) signLight.intensity = 2.0+Math.sin(t*2.1)*.25;
-  if(gateLight) gateLight.intensity = 2.5+Math.sin(t*6.3)*.35+Math.sin(t*17.1)*.18;
+  if(gateLight) gateLight.intensity = 4.0+Math.sin(t*6.3)*.55+Math.sin(t*17.1)*.28;
 
   // infected
   for(const e of dyn.infected){
