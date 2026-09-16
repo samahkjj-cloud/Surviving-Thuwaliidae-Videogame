@@ -116,10 +116,38 @@ canvas#cv{display:block;width:100%;height:100%}
   linear-gradient(-45deg,transparent 43%,var(--warn) 43%,var(--warn) 57%,transparent 57%)}
 .hud .count{position:absolute;top:29px;inset-inline-start:14px;
   font-family:var(--mono);font-size:11px;color:rgba(190,200,203,.6);direction:ltr}
-.hud .hp{position:absolute;top:12px;inset-inline-end:14px;display:flex;gap:5px;flex-direction:row-reverse}
+.hud .pausebtn{
+  position:absolute;top:10px;right:12px;pointer-events:auto;
+  width:38px;height:32px;display:grid;place-items:center;
+  background:rgba(12,14,16,.55);border:1px solid rgba(180,196,200,.30);
+  color:#dde5e7;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;
+  -webkit-tap-highlight-color:transparent;backdrop-filter:blur(2px);
+}
+.hud .pausebtn:hover{background:rgba(159,198,209,.75);color:#05080a}
+.hud .pausebtn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.hud .hp{position:absolute;top:50px;right:12px;display:flex;gap:5px;flex-direction:row-reverse}
 .hp i{width:9px;height:9px;background:var(--warn);display:block}
 .hp i.off{background:rgba(201,48,44,.18)}
-.hud .wep{position:absolute;top:30px;inset-inline-end:14px;font-size:11.5px;color:rgba(200,190,164,.75)}
+.hud .wep{position:absolute;top:66px;right:12px;font-size:11.5px;color:rgba(200,190,164,.75)}
+
+.paused{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+  padding:18px;background:rgba(3,5,7,.86)}
+.paused[hidden]{display:none!important}
+.paused .paper{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;max-width:min(420px,92%)}
+.paused h2{font-family:var(--hand);font-weight:700;font-size:clamp(20px,4vw,28px);margin:0;color:#14110d}
+.paused .prow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.paused .tog{color:#4a4033;border-color:rgba(20,17,13,.35);background:rgba(20,17,13,.06)}
+.paused .tog:hover{color:#14110d;border-color:rgba(20,17,13,.6)}
+.paused .tog[aria-pressed="true"]{color:#2f5c6b;border-color:#2f5c6b}
+
+/* a landscape phone gets the whole screen — nothing but the game */
+@media (orientation:landscape) and (pointer:coarse){
+  .shell{max-width:none;padding:0}
+  .masthead,.bar{display:none}
+  .stage{position:fixed;inset:0;max-width:none;width:100vw;height:100vh;height:100dvh;
+         aspect-ratio:auto;border:0;margin:0;z-index:50}
+  .book{z-index:60}
+}
 .hud .hide{position:absolute;top:50px;inset-inline-start:14px;font-size:11.5px;color:rgba(159,198,209,.85)}
 .hud .toast{position:absolute;bottom:34px;left:0;right:0;text-align:center;
   font-size:13px;color:rgba(228,218,190,.95);opacity:0;transition:opacity .3s ease;
@@ -333,10 +361,23 @@ button{font-family:inherit}
     <div class="hud" id="hud">
       <div class="pips" id="pips"></div>
       <div class="count" id="count">0 / 4</div>
+      <button class="pausebtn" id="pauseBtn" hidden aria-label="إيقاف مؤقت">❚❚</button>
       <div class="hp" id="hp"></div>
       <div class="wep" id="wep" hidden></div>
       <div class="hide" id="hideTag" hidden>مختبئ</div>
       <div class="toast" id="toast"></div>
+    </div>
+
+    <div class="paused" id="pausedPanel" hidden>
+      <div class="paper torn">
+        <h2 class="ink shaky bleed">وقفة</h2>
+        <button class="btn" id="resumeBtn">استئناف</button>
+        <div class="prow">
+          <button class="tog" id="sndBtn2" aria-pressed="true">الصوت</button>
+          <button class="tog" id="bookBtn2">دفتر الميدان</button>
+          <button class="tog" id="redoBtn2">إعادة</button>
+        </div>
+      </div>
     </div>
 
     <div class="stick" id="stick" aria-label="عصا الحركة">
@@ -1231,6 +1272,7 @@ function go(n){
 }
 function start(){
   askTilt();
+  goFullscreen();
   if(G&&G.screen) speakBrief(G.screen);
   veil.hidden=true; running=true; last=performance.now();
   stage.focus({preventScroll:true});
@@ -1275,6 +1317,7 @@ function initGL(){
   camera=new THREE.PerspectiveCamera(60,16/9,0.08,420);
   resizeGL();
   addEventListener('resize',resizeGL);
+  addEventListener('orientationchange',()=>setTimeout(resizeGL,180));
 }
 function resizeGL(){
   if(!renderer) return;
@@ -1826,7 +1869,8 @@ function loop(now){
   last=now; t+=dt;
   frameAvg+=((dt*1000)-frameAvg)*0.05;
   if(frameAvg>34 && renderer.getPixelRatio()>0.85) renderer.setPixelRatio(Math.max(0.85,renderer.getPixelRatio()-0.12));
-  if(intro) updateIntro(dt);
+  if(paused){ /* held */ }
+  else if(intro) updateIntro(dt);
   else if(outro) updateOutro(dt);
   else if(running) update(dt);
   syncScene(G,dt);
@@ -1842,6 +1886,7 @@ const hideEl=document.getElementById('hideTag'), toastEl=document.getElementById
 let hudSig='';
 function updateHUD(){
   if(!G) return;
+  pauseBtn.hidden = !(running||paused);
   const P=G.P, sec=rescue.saved.length, wi=G.following||0, lost=rescue.lost.length;
   const sig=[sec,wi,lost,P.hp,P.weapon.key,P.hidden,G.toastT>0?G.toast:'',Math.round((G.behind||0)*10)].join('|');
   if(sig!==hudSig){
@@ -2277,6 +2322,50 @@ bookBody.addEventListener('click',e=>{
   if(n===1) strain=null;
   closeBook(); go(n);
 });
+
+/* ---------------- pause ---------------- */
+const pauseBtn=document.getElementById('pauseBtn');
+const pausedPanel=document.getElementById('pausedPanel');
+let paused=false;
+function setPause(p){
+  if(p===paused) return;
+  if(p && !running) return;                     // nothing to pause during a cutscene
+  paused=p;
+  pausedPanel.hidden=!p;
+  pauseBtn.textContent = p ? '▶' : '❚❚';
+  if(p){
+    running=false;
+    if(on&&AC){ musicStop(); if(seaGain) seaGain.gain.setTargetAtTime(0,AC.currentTime,.15); }
+    if('speechSynthesis' in window){ try{ speechSynthesis.pause(); }catch(e){} }
+  } else {
+    running=true; last=performance.now();
+    if(on&&AC&&seaGain) seaGain.gain.setTargetAtTime(.055,AC.currentTime,.4);
+    if('speechSynthesis' in window){ try{ speechSynthesis.resume(); }catch(e){} }
+    stage.focus({preventScroll:true});
+  }
+}
+pauseBtn.addEventListener('click',()=>setPause(!paused));
+document.getElementById('resumeBtn').addEventListener('click',()=>setPause(false));
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(k==='p'){ setPause(!paused); }
+  else if(k==='escape' && !book.classList.contains('open') && running!==undefined){ setPause(!paused); }
+});
+// a phone that loses focus should not keep playing in the dark
+addEventListener('visibilitychange',()=>{ if(document.hidden) setPause(true); });
+
+// the pause panel mirrors the controls that the fullscreen layout hides
+document.getElementById('sndBtn2').addEventListener('click',()=>{ sndBtn.click(); });
+document.getElementById('bookBtn2').addEventListener('click',()=>{ bookBtn.click(); setPause(false); });
+document.getElementById('redoBtn2').addEventListener('click',()=>{ setPause(false); restartAll(); });
+
+/* a landscape phone gets the real thing, if the browser allows it */
+function goFullscreen(){
+  if(!matchMedia('(pointer:coarse)').matches) return;
+  const el=document.documentElement;
+  const fn=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(fn && !document.fullscreenElement){ try{ fn.call(el,{navigationUI:'hide'}); }catch(e){} }
+}
 
 function restartAll(){
   if(outro) endOutro(false);
