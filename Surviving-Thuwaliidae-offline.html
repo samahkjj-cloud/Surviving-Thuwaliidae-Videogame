@@ -1054,16 +1054,30 @@ function update(dt){
     const d=Math.hypot(P.x-z.x,P.y-z.y);
     if(d<58 && c.d>0 && Math.abs(c.s/Math.max(1,c.d))<.70 && d<stabBest){ stabBest=d; stabTarget=z; }
   }
-  g.stabReady = !!stabTarget && P.weapon.key!=='none';
+  // the button shows whenever one is within arm's length; what it does depends
+  // on whether you are holding anything
+  g.stabReady = !!stabTarget;
+  g.stabArmed = P.weapon.key!=='none';
   if(stabWanted){
     stabWanted=false;
-    if(stabTarget && P.weapon.key!=='none' && P.atkCd<=0){
-      stabTarget.hp -= P.weapon.dmg+2;              // committed, and it hurts
-      P.atkCd = P.weapon.cd*1.6; P.swing=P.weapon.cd;
-      stabTarget.stagger=.5; stabTarget.hitCd=.4;
-      counters.engage += 2.0;
-      g.shake=.10; gruntEffort(); zHurt(panOf(g,stabTarget));
-      if(stabTarget.hp<=0) stabTarget.dead=true;
+    if(stabTarget && P.atkCd<=0){
+      const a=Math.atan2(stabTarget.y-P.y,stabTarget.x-P.x);
+      if(g.stabArmed){
+        stabTarget.hp -= P.weapon.dmg+2;            // committed, and it hurts
+        P.atkCd = P.weapon.cd*1.6; P.swing=P.weapon.cd;
+        stabTarget.stagger=.55; stabTarget.hitCd=.4;
+        counters.engage += 2.0;
+        g.shake=.10; gruntEffort(); zHurt(panOf(g,stabTarget));
+        if(stabTarget.hp<=0) stabTarget.dead=true;
+      } else {
+        // bare hands: you cannot hurt it, only buy yourself a second
+        P.atkCd=.75; P.swing=.4;
+        stabTarget.stagger=.42; stabTarget.atk=1.2;
+        stabTarget.x+=Math.cos(a)*30; stabTarget.y+=Math.sin(a)*30;
+        counters.engage += .5;
+        g.shake=.06; gruntEffort();
+        toast(g,'دفعته بيديك');
+      }
     }
   }
 
@@ -1796,7 +1810,7 @@ function syncScene(g,dt){
     if(e.m.visible) e.m.rotation.y+=dt*.7;
   }
   const sb=document.getElementById("stabBtn");
-  if(sb) sb.hidden = !g.stabReady;
+  if(sb){ sb.hidden = !g.stabReady; sb.textContent = g.stabArmed ? "طعن" : "دفع"; }
   syncWeapon(g);
   if(viewModel){
     const lunge=Math.sin(Math.min(1,(P.swing/(P.weapon.cd||1))/.75)*Math.PI);
