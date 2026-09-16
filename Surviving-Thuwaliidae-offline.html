@@ -774,9 +774,16 @@ stage.addEventListener('pointercancel',dropP);
 
 /* ---------- on-screen controls ---------- */
 let pickWanted=false;
+function padWanted(){
+  // a landscape phone is ~812 wide, so width alone is not the test — but it is a
+  // useful fallback where pointer detection lies
+  return matchMedia('(pointer:coarse)').matches || innerWidth < 900;
+}
 function bindPad(){
-  const coarse = matchMedia('(pointer:coarse)').matches || innerWidth<760;
-  if(coarse) stage.classList.add('touch');
+  const apply=()=>stage.classList.toggle('touch',padWanted());
+  apply();
+  addEventListener('resize',apply);
+  addEventListener('orientationchange',apply);
   const press=(el,on)=>{
     const k=el.dataset.k;
     el.classList.toggle('on',on);
