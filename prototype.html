@@ -475,7 +475,7 @@ let strain = null;
 function fresh(screen){
   const g = {
     screen, over:false,
-    P:{ x:0,y:0, a:0, r:9, hp:3, armed:false, iframe:0, hidden:false, bob:0, breath:0,
+    P:{ x:0,y:0, a:0, r:9, hp:4, armed:false, iframe:0, hidden:false, bob:0, breath:0,
         weapon:WEAPONS.none, atkCd:0, swing:0, pickup:0, step:0 },
     walls:[], covers:[], items:[], infected:[], survivors:[], ground:[], tarps:[],
     toast:'', toastT:0,
@@ -871,7 +871,9 @@ function update(dt){
       gruntEffort(); zHurt(panOf(g,z));
       if(z.hp<=0){ z.dead=true; g.flash=.28; }
     }
-    if(d < P.r+z.r+5 && P.iframe<=0 && z.stagger<=0) damage();
+    // each one has its own swing cooldown, so a pack cannot delete you at once
+    z.atk=Math.max(0,(z.atk||0)-dt);
+    if(d < P.r+z.r+5 && P.iframe<=0 && z.stagger<=0 && z.atk<=0){ z.atk=1.5; damage(); }
 
     if(z.seen && !z.dead){
       const away = ((P.x-z.x)*ca + (P.y-z.y)*sa) * mv.f;
@@ -948,7 +950,7 @@ function toast(g,msg){ g.toast=msg; g.toastT=2.6; }
 
 function damage(){
   const P=G.P;
-  P.hp-=1; P.iframe=1.2; G.shake=11;
+  P.hp-=1; P.iframe=1.0; G.shake=11;
   hurtEl.classList.add('on');
   setTimeout(()=>hurtEl.classList.remove('on'),100);
   gruntPain(); hush(.006,.8);
@@ -1619,7 +1621,7 @@ function applySixthSense(g){
 
 function drawHUD(g){
   const P=g.P;
-  for(let i=0;i<3;i++){
+  for(let i=0;i<4;i++){
     ctx.fillStyle = i<P.hp ? '#c9302c' : 'rgba(201,48,44,.18)';
     ctx.fillRect(W-14-i*8,9,5,5);
   }
