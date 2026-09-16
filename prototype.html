@@ -406,6 +406,16 @@ function buildTextures(){
     }
     grit(x,w,h,61,1100,.02,.1,true);
   });
+  // a soft falloff disc — without a map a sprite draws as a hard white square
+  TEX.glow=makeTex(128,128,(x,w,h)=>{
+    const g=x.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
+    g.addColorStop(0,'rgba(255,255,255,1)');
+    g.addColorStop(.28,'rgba(255,255,255,.55)');
+    g.addColorStop(.62,'rgba(255,255,255,.14)');
+    g.addColorStop(1,'rgba(255,255,255,0)');
+    x.fillStyle=g; x.fillRect(0,0,w,h);
+  });
+
   // drowned flesh: grey-green, blotched, with veins showing through
   TEX.flesh=makeTex(256,256,(x,w,h)=>{
     x.fillStyle='#7e8574'; x.fillRect(0,0,w,h);
@@ -1045,7 +1055,7 @@ function makeInfected(){
   const eR=mk(eg,eyeMat, .040,.055,.094,neck);
   eL.castShadow=eR.castShadow=false;
   // a faint bloom so the eyes carry through fog and darkness
-  const glowMat=new THREE.SpriteMaterial({color:0xff2a1e,opacity:.55,transparent:true,
+  const glowMat=new THREE.SpriteMaterial({map:tex(TEX.glow,1),color:0xff2a1e,opacity:.55,transparent:true,
     blending:THREE.AdditiveBlending,depthWrite:false});
   const glow=new THREE.Sprite(glowMat);
   glow.scale.set(.30,.16,1); glow.position.set(0,.055,.10); neck.add(glow);
@@ -1319,7 +1329,7 @@ function buildScene(g){
     const lamp=new THREE.Mesh(new THREE.SphereGeometry(WX(16),10,8),lampMat);
     lamp.position.set(WX(g.gate.x),WX(206),WZ(g.gate.y));
     scene.add(lamp);
-    const halo=new THREE.Sprite(new THREE.SpriteMaterial({color:0xffb254,opacity:.7,
+    const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:tex(TEX.glow,1),color:0xffb254,opacity:.7,
       transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
     halo.scale.set(2.6,2.6,1);
     halo.position.copy(lamp.position);
