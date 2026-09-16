@@ -870,7 +870,7 @@ const SCREEN_TEXT={
 function go(n){
   clearFrom(n);
   G=fresh(n);
-  buildScene(G);
+  safeBuild(G);
   running=false;
   const s=SCREEN_TEXT[n];
   showVeil(s.eyebrow,s.title,s.body,n===1?'ابدأ':'ادخل',start);
@@ -951,8 +951,11 @@ function makeHuman(p){
     m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true;
     grp.add(m); return m;
   };
-  const torso=mk(new THREE.CapsuleGeometry? new THREE.CapsuleGeometry(.17,.42,4,10)
-                 : new THREE.CylinderGeometry(.17,.19,.62,10), cloth, 0,1.12,0);
+  // test the constructor, never call it to test it
+  const torsoGeo = typeof THREE.CapsuleGeometry === 'function'
+    ? new THREE.CapsuleGeometry(.17,.42,4,10)
+    : new THREE.CylinderGeometry(.17,.19,.62,10);
+  const torso=mk(torsoGeo, cloth, 0,1.12,0);
   const head=mk(new THREE.SphereGeometry(.115,16,12),skin,0,1.52,0);
   const armL=mk(new THREE.CylinderGeometry(.052,.045,.62,8),skin,-.235,1.14,0);
   const armR=mk(new THREE.CylinderGeometry(.052,.045,.62,8),skin, .235,1.14,0);
@@ -995,6 +998,10 @@ function makeWeaponMesh(kind){
   return g;
 }
 
+function safeBuild(g){
+  try{ buildScene(g); }
+  catch(err){ console.error("scene build failed:",err); }
+}
 function buildScene(g){
   disposeScene();
   dyn={infected:[],survivors:[],items:[]};
@@ -1049,7 +1056,7 @@ function buildScene(g){
     [-.06,.300],[-.24,.292],[-.38,.268],[-.47,.238],[-.50,.215]
   ];
   function hullPath(sx,sy,inset){
-    const p=new THREE.Path? new THREE.Shape():new THREE.Shape();
+    const p=new THREE.Shape();
     const pts=[];
     for(const q of HULL) pts.push([q[0]*sx*(1-inset*.10), q[1]*sy*(1-inset)]);
     for(let i=HULL.length-1;i>=0;i--){
@@ -1633,7 +1640,7 @@ function startIntro(){
   intro={start:performance.now(),t:0,beat:-1,done:false,blink:0,nextBlink:1.2};
   introEl.hidden=false; veil.hidden=true;
   titleEl.classList.remove('show'); introWrap.classList.remove('show'); lineEl.textContent='';
-  G=fresh(1); buildScene(G); running=false;
+  G=fresh(1); safeBuild(G); running=false;
   if(!raf) raf=requestAnimationFrame(loop);
 }
 function updateIntro(dt){
@@ -1759,7 +1766,7 @@ function boot(saved){
   const resuming=saved&&saved.screen&&saved.screen>1;
   if(!resuming&&!(saved&&saved.seenIntro)){ startIntro(); return; }
   G=fresh(saved&&saved.screen?saved.screen:1);
-  buildScene(G);
+  safeBuild(G);
   const s=SCREEN_TEXT[G.screen];
   showVeil(s.eyebrow,s.title,s.body,G.screen===1?'ابدأ':'ادخل',start);
   raf=requestAnimationFrame(loop);
