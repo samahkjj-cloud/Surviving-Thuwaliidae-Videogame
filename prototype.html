@@ -129,22 +129,47 @@ canvas#cv{display:block;width:100%;height:100%}
 
 /* ---------- overlays ---------- */
 /* ---------- thumb controls, only where there are thumbs ---------- */
-.pad,.acts{position:absolute;bottom:12px;display:none;z-index:6;user-select:none;-webkit-user-select:none}
-.pad{left:12px;display:none;grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px);gap:4px}
-.acts{right:12px;flex-direction:column;gap:6px}
-.stage.touch .pad{display:grid}
+.stick,.acts{position:absolute;bottom:12px;display:none;z-index:6;user-select:none;-webkit-user-select:none}
+.stick{left:12px;width:112px;height:112px;touch-action:none}
+.acts{right:12px;flex-direction:column;align-items:flex-end;gap:7px}
+.stage.touch .stick{display:block}
 .stage.touch .acts{display:flex}
+.stick .ring{
+  position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 50% 50%, rgba(12,16,18,.34), rgba(12,16,18,.56));
+  border:1px solid rgba(180,196,200,.26);
+  backdrop-filter:blur(2px);
+}
+.stick .knob{
+  position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;
+  border-radius:50%;background:rgba(190,212,218,.70);border:1px solid rgba(232,242,244,.5);
+  box-shadow:0 2px 10px rgba(0,0,0,.5);
+  transition:background .12s ease;
+  will-change:transform;
+}
+.stick.live .knob{background:rgba(159,198,209,.95)}
+.grid2{display:grid;grid-template-columns:repeat(2,74px);gap:6px}
 .k{
   background:rgba(12,14,16,.52);border:1px solid rgba(180,196,200,.30);
-  color:#dde5e7;border-radius:4px;font-size:15px;line-height:1;
+  color:#dde5e7;border-radius:4px;line-height:1;height:38px;
+  font-family:var(--ui);font-size:12.5px;font-weight:500;
   display:grid;place-items:center;cursor:pointer;
   -webkit-tap-highlight-color:transparent;touch-action:none;
   backdrop-filter:blur(2px);
 }
-.k:active,.k.on{background:rgba(159,198,209,.78);color:#05080a;border-color:#9fc6d1}
-.k.up{grid-area:1/2} .k.left{grid-area:2/1} .k.right{grid-area:2/3} .k.down{grid-area:3/2}
-.k.wide{width:74px;height:38px;font-family:var(--ui);font-size:12.5px;font-weight:500}
+.k:active,.k.on{background:rgba(159,198,209,.80);color:#05080a;border-color:#9fc6d1}
 .k:focus-visible{outline:2px solid #fff;outline-offset:2px}
+/* the stab only exists while something is close enough to stab */
+.k.stab{
+  width:154px;height:44px;font-size:14px;font-weight:600;
+  background:rgba(142,26,20,.80);border-color:#e0574c;color:#fff;
+  box-shadow:0 0 18px rgba(201,48,44,.45);
+  animation:stabPulse 1.1s ease-in-out infinite;
+}
+.k.stab:active{background:#e0574c;color:#14110d}
+.k.stab[hidden]{display:none!important}
+@keyframes stabPulse{0%,100%{box-shadow:0 0 14px rgba(201,48,44,.35)}50%{box-shadow:0 0 26px rgba(201,48,44,.7)}}
+@media (prefers-reduced-motion:reduce){ .k.stab{animation:none} }
 
 /* ---------- turn the phone ---------- */
 .tilt{
@@ -305,16 +330,18 @@ button{font-family:inherit}
       <div class="toast" id="toast"></div>
     </div>
 
-    <div class="pad" id="padMove" aria-hidden="true">
-      <button class="k up"    data-k="w" aria-label="تقدّم">▲</button>
-      <button class="k left"  data-k="a" aria-label="يسار">◀</button>
-      <button class="k right" data-k="d" aria-label="يمين">▶</button>
-      <button class="k down"  data-k="s" aria-label="تراجع">▼</button>
+    <div class="stick" id="stick" aria-label="عصا الحركة">
+      <div class="ring"></div>
+      <div class="knob" id="knob"></div>
     </div>
     <div class="acts" id="padActs" aria-hidden="true">
-      <button class="k wide" data-k="run"  aria-label="ركض">ركض</button>
-      <button class="k wide" data-k="jump" aria-label="قفز">قفز</button>
-      <button class="k wide" data-k="pick" aria-label="التقاط">التقاط</button>
+      <button class="k stab" data-k="stab" id="stabBtn" hidden aria-label="طعن">طعن</button>
+      <div class="grid2">
+        <button class="k" data-k="run"  aria-label="ركض">ركض</button>
+        <button class="k" data-k="jump" aria-label="قفز">قفز</button>
+        <button class="k" data-k="pick" aria-label="التقاط">التقاط</button>
+        <button class="k" data-k="drop" aria-label="إنزال">إنزال</button>
+      </div>
     </div>
 
     <div class="tilt" id="tilt">
@@ -764,7 +791,71 @@ stage.addEventListener('pointerup',dropP);
 stage.addEventListener('pointercancel',dropP);
 
 /* ---------- on-screen controls ---------- */
-let pickWanted=false;
+let pickWanted=false, dropWanted=false, stabWanted=false;
+let stickVec={f:0,s:0};
+
+function bindStick(){
+  const el=document.getElementById('stick'), knob=document.getElementById('knob');
+  let id=null;
+  const R=44;
+  const set=(dx,dy)=>{
+    const d=Math.hypot(dx,dy);
+    const k=d>R? R/d : 1;
+    const x=dx*k, y=dy*k;
+    knob.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
+    // a dead zone keeps a resting thumb from creeping forward
+    const mag=Math.min(1,d/R), live=mag>0.16;
+    stickVec = live ? {f:-y/R, s:x/R} : {f:0,s:0};
+  };
+  const start=e=>{
+    if(id!==null) return;
+    id=e.pointerId; el.setPointerCapture(id); el.classList.add('live');
+    const r=el.getBoundingClientRect();
+    set(e.clientX-(r.left+r.width/2), e.clientY-(r.top+r.height/2));
+    stage.focus({preventScroll:true});
+    e.preventDefault();
+  };
+  const move=e=>{
+    if(e.pointerId!==id) return;
+    const r=el.getBoundingClientRect();
+    set(e.clientX-(r.left+r.width/2), e.clientY-(r.top+r.height/2));
+    e.preventDefault();
+  };
+  const end=e=>{
+    if(e.pointerId!==id) return;
+    id=null; el.classList.remove('live');
+    knob.style.transform='translate(0,0)';
+    stickVec={f:0,s:0};
+  };
+  el.addEventListener('pointerdown',start);
+  el.addEventListener('pointermove',move);
+  el.addEventListener('pointerup',end);
+  el.addEventListener('pointercancel',end);
+  el.addEventListener('lostpointercapture',end);
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+}
+
+/* ---------- phone tilt adds a little head movement ---------- */
+let tilt={on:false, base:null, pitch:0, roll:0};
+function bindTilt(){
+  if(!window.DeviceOrientationEvent) return;
+  addEventListener('deviceorientation',e=>{
+    if(e.beta===null && e.gamma===null) return;
+    if(tilt.base===null) tilt.base={b:e.beta||0, g:e.gamma||0};   // wherever they are holding it now is level
+    const db=(e.beta||0)-tilt.base.b, dg=(e.gamma||0)-tilt.base.g;
+    // a nudge, never a takeover: dragging to look must stay in charge
+    tilt.pitch = Math.max(-.22,Math.min(.22, db*0.0055));
+    tilt.roll  = Math.max(-.10,Math.min(.10, dg*0.0022));
+    tilt.on=true;
+  });
+}
+function askTilt(){
+  const D=window.DeviceOrientationEvent;
+  if(D && typeof D.requestPermission==='function'){
+    D.requestPermission().then(s=>{ if(s==='granted') bindTilt(); }).catch(()=>{});
+  } else bindTilt();
+}
+
 function padWanted(){
   // a landscape phone is ~812 wide, so width alone is not the test — but it is a
   // useful fallback where pointer detection lies
@@ -778,12 +869,15 @@ function bindPad(){
   const press=(el,on)=>{
     const k=el.dataset.k;
     el.classList.toggle('on',on);
+    // every button owns its own pointer, so run + jump + stick all hold at once
     if(k==='run'){ keys['shift']=on; return; }
-    if(k==='jump'){ if(on) keys[' ']=true; else keys[' ']=false; return; }
+    if(k==='jump'){ keys[' ']=on; return; }
     if(k==='pick'){ if(on) pickWanted=true; return; }
+    if(k==='drop'){ if(on) dropWanted=true; return; }
+    if(k==='stab'){ if(on) stabWanted=true; return; }
     keys[k]=on;
   };
-  document.querySelectorAll('.pad .k, .acts .k').forEach(el=>{
+  document.querySelectorAll('.acts .k').forEach(el=>{
     // pointer events so a thumb can slide off a button without sticking it down
     el.addEventListener('pointerdown',e=>{ e.preventDefault(); el.setPointerCapture(e.pointerId); press(el,true); stage.focus({preventScroll:true}); });
     el.addEventListener('pointerup',  e=>{ e.preventDefault(); press(el,false); });
@@ -803,6 +897,7 @@ function readMove(){
     const vx=moveP.x-moveP.ox, vy=moveP.y-moveP.oy, d=Math.hypot(vx,vy);
     if(d>10){ f+=-vy/d; s+=vx/d; }
   }
+  f+=stickVec.f; s+=stickVec.s;
   const m=Math.hypot(f,s);
   return m>1?{f:f/m,s:s/m}:{f,s};
 }
@@ -868,12 +963,48 @@ function update(dt){
   P.iframe=Math.max(0,P.iframe-dt);
   P.hidden=g.covers.some(c=>inRect(P.x,P.y,c));
 
-  // the pick button reaches a little further than walking over a thing does
-  const reach = pickWanted ? 72 : 34;
-  pickWanted=false;
+  // ---- reach out and take hold of whatever is nearest ----
+  if(pickWanted){
+    let best=null,bd=1e9;
+    const consider=(o,kind)=>{ const d=Math.hypot(P.x-o.x,P.y-o.y); if(d<72&&d<bd){bd=d;best={o,kind};} };
+    for(const it of g.items) if(!it.taken) consider(it,'item');
+    for(const s of g.survivors) if(s.state==='trapped') consider(s,'survivor');
+    for(const z of g.infected) consider(z,'infected');
+    if(best){
+      if(best.kind==='infected'){
+        // you grabbed the wrong thing in the dark, and it grabs back
+        toast(g,'أمسكتَ واحداً منهم');
+        best.o.aggro=3.6; best.o.seen=true; best.o.lunge=1.5;
+        zShriek(bd,panOf(g,best.o));
+        if(P.iframe<=0) damage();
+      } else if(best.kind==='survivor'){
+        best.o.state='follow'; best.o.voice=1.2;
+        toast(g,best.o.name+' معك الآن');
+        callOut(bd,panOf(g,best.o),false); hush(.012,.5);
+      } else {
+        best.o.taken=true; P.weapon=WEAPONS[best.o.kind]||WEAPONS.oar; P.pickup=1.4;
+        beep(300,.08,.05);
+        if(g.screen===1) g.exit.locked=false;
+      }
+    }
+    pickWanted=false;
+  }
+  // ---- set it down where you stand ----
+  if(dropWanted){
+    dropWanted=false;
+    if(P.weapon.key!=='none'){
+      const k=P.weapon.key;
+      g.items.push({x:P.x+Math.cos(P.a)*22,y:P.y+Math.sin(P.a)*22,kind:k,taken:false,fresh:true});
+      P.weapon=WEAPONS.none; P.pickup=0;
+      toast(g,'أنزلتَ سلاحك');
+      beep(180,.09,.04);
+    }
+  }
+
   for(const it of g.items){
     if(it.taken) continue;
-    if(Math.hypot(P.x-it.x,P.y-it.y)<reach){
+    if(it.fresh){ if(Math.hypot(P.x-it.x,P.y-it.y)>44) it.fresh=false; continue; }  // don't re-grab it instantly
+    if(Math.hypot(P.x-it.x,P.y-it.y)<34){
       it.taken=true; P.weapon=WEAPONS[it.kind]||WEAPONS.oar; P.pickup=1.4;
       beep(300,.08,.05);
       if(g.screen===1) g.exit.locked=false;
@@ -903,6 +1034,26 @@ function update(dt){
   }
   g.following=following;
   const noise=(1+following*0.24)*(P.running?1.45:1);
+
+  // ---- the stab: only offered when one is genuinely within arm's length ----
+  let stabTarget=null, stabBest=1e9;
+  for(const z of g.infected){
+    const c=toCam(g,z.x,z.y);
+    const d=Math.hypot(P.x-z.x,P.y-z.y);
+    if(d<58 && c.d>0 && Math.abs(c.s/Math.max(1,c.d))<.70 && d<stabBest){ stabBest=d; stabTarget=z; }
+  }
+  g.stabReady = !!stabTarget && P.weapon.key!=='none';
+  if(stabWanted){
+    stabWanted=false;
+    if(stabTarget && P.weapon.key!=='none' && P.atkCd<=0){
+      stabTarget.hp -= P.weapon.dmg+2;              // committed, and it hurts
+      P.atkCd = P.weapon.cd*1.6; P.swing=P.weapon.cd;
+      stabTarget.stagger=.5; stabTarget.hitCd=.4;
+      counters.engage += 2.0;
+      g.shake=.10; gruntEffort(); zHurt(panOf(g,stabTarget));
+      if(stabTarget.hp<=0) stabTarget.dead=true;
+    }
+  }
 
   let nearest=1e9, behind=0;
   for(const z of g.infected){
@@ -984,6 +1135,7 @@ function update(dt){
   const target=nearest<1e8?Math.max(0,1-nearest/300):0;
   g.dread+=(target-g.dread)*Math.min(1,dt*2.4);
   heartbeat(dt,g.dread);
+  ambience(dt,g.screen);
   g.behind=behind;
 
   let hunted=false,eyed=false;
@@ -1042,6 +1194,7 @@ const SCREEN_TEXT={
      body:'سارة عند اللافتة، والقارب في الطرف الآخر. مصباحك وحده، وما خلفك أسود تماماً. والمصابون عادوا بسلالة مضادة لأسلوبك أنت.'}
 };
 function go(n){
+  if("speechSynthesis" in window){ try{ speechSynthesis.cancel(); }catch(e){} }
   clearFrom(n);
   G=fresh(n);
   safeBuild(G);
@@ -1051,6 +1204,8 @@ function go(n){
   if(n===3&&strain) openBookFor('log',STRAINS[strain]);
 }
 function start(){
+  askTilt();
+  if(G&&G.screen) speakBrief(G.screen);
   veil.hidden=true; running=true; last=performance.now();
   stage.focus({preventScroll:true});
   if(!raf) raf=requestAnimationFrame(loop);
@@ -1628,6 +1783,8 @@ function syncScene(g,dt){
     e.m.visible=!e.it.taken;
     if(e.m.visible) e.m.rotation.y+=dt*.7;
   }
+  const sb=document.getElementById("stabBtn");
+  if(sb) sb.hidden = !g.stabReady;
   syncWeapon(g);
   if(viewModel){
     const lunge=Math.sin(Math.min(1,(P.swing/(P.weapon.cd||1))/.75)*Math.PI);
@@ -1809,6 +1966,94 @@ function scream(pan){
   vtone({type:'sawtooth',f0:420,f1:180,dur:1.05,vol:.2,filterType:'bandpass',cut:1500,q:2.4,wobble:26,wobRate:12,pan});
   nburst({dur:.9,type:'highpass',f0:800,f1:2600,q:.8,vol:.1,pan});
 }
+/* ---- a grey coast: surf that breaks, and birds that will not shut up ---- */
+function waveCrash(vol){
+  if(!on||!AC) return;
+  const now=AC.currentTime, dur=1.9+Math.random()*1.1;
+  const s=AC.createBufferSource(); s.buffer=NOISE; s.loop=true;
+  s.playbackRate.value=.55+Math.random()*.3;
+  const f=AC.createBiquadFilter(); f.type='lowpass';
+  f.frequency.setValueAtTime(240,now);
+  f.frequency.linearRampToValueAtTime(1500,now+.30);   // the break
+  f.frequency.exponentialRampToValueAtTime(330,now+dur); // the drag back
+  const g=AC.createGain();
+  g.gain.setValueAtTime(.0001,now);
+  g.gain.linearRampToValueAtTime(vol,now+.26);
+  g.gain.exponentialRampToValueAtTime(.0001,now+dur);
+  s.connect(f).connect(g).connect(out((Math.random()-.5)*1.2));
+  s.start(now); s.stop(now+dur+.05);
+}
+function gull(pan){
+  if(!on||!AC) return;
+  const now=AC.currentTime;
+  const calls=2+((Math.random()*3)|0);
+  for(let i=0;i<calls;i++){
+    const t0=now+i*(.17+Math.random()*.12);
+    const o=AC.createOscillator(), g=AC.createGain(), f=AC.createBiquadFilter();
+    o.type='sawtooth';
+    const base=760+Math.random()*320;
+    o.frequency.setValueAtTime(base*.72,t0);
+    o.frequency.exponentialRampToValueAtTime(base*1.28,t0+.06);
+    o.frequency.exponentialRampToValueAtTime(base*.58,t0+.20);
+    const w=AC.createOscillator(); w.type='sine'; w.frequency.value=22+Math.random()*14;
+    const wg=AC.createGain(); wg.gain.value=40;
+    w.connect(wg).connect(o.frequency); w.start(t0); w.stop(t0+.24);
+    f.type='bandpass'; f.frequency.value=base*1.25; f.Q.value=3.4;
+    g.gain.setValueAtTime(.0001,t0);
+    g.gain.exponentialRampToValueAtTime(.055-i*.008,t0+.03);
+    g.gain.exponentialRampToValueAtTime(.0001,t0+.22);
+    o.connect(f).connect(g).connect(out(pan));
+    o.start(t0); o.stop(t0+.25);
+  }
+}
+let ambT=0, gullT=0;
+function ambience(dt,screen){
+  if(!on||!AC) return;
+  ambT-=dt; gullT-=dt;
+  if(ambT<=0){
+    ambT = screen===1 ? 2.2+Math.random()*2.0 : 4.5+Math.random()*3.5;
+    waveCrash(screen===1 ? .085+Math.random()*.05 : .035+Math.random()*.025);
+  }
+  if(gullT<=0){
+    gullT = screen===1 ? 4.5+Math.random()*6 : 16+Math.random()*14;
+    if(screen!==3) gull((Math.random()-.5)*1.5);
+  }
+}
+
+/* ---- the mission, spoken by someone who is not handling this well ---- */
+const BRIEF={
+  1:'يا ساتر… المركب انكسر على الشعاب. ثمانية كنّا، وأنا بس اللي طلعت على رجولي. نورة تصارخ من بعيد… لازم أوصلها قبلهم.',
+  2:'السوق مسكّر من جوّه… وفهد وماجد داخل. كل ما صوتنا يعلى، يقربون أكثر. لا تركض… لا تركض إلا إذا اضطريت.',
+  3:'الدنيا ظلمة… ما أشوف إلا اللي يوصله ضوّي. سارة عند اللوحة الحمرا، والقارب في آخر الكورنيش. وهم… تعلّموا مني.'
+};
+let briefVoice=null;
+function pickArabicVoice(){
+  if(!('speechSynthesis' in window)) return null;
+  const vs=speechSynthesis.getVoices()||[];
+  return vs.find(v=>/ar[-_]SA/i.test(v.lang)) || vs.find(v=>/^ar/i.test(v.lang)) || null;
+}
+if('speechSynthesis' in window){
+  speechSynthesis.onvoiceschanged=()=>{ briefVoice=pickArabicVoice(); };
+}
+function speakBrief(n){
+  if(!('speechSynthesis' in window)) return;
+  try{ speechSynthesis.cancel(); }catch(e){}
+  const line=BRIEF[n]; if(!line) return;
+  if(!briefVoice) briefVoice=pickArabicVoice();
+  // broken into gasps, with a breath between each — the tremble is in the pacing
+  const parts=line.split('…').map(s=>s.trim()).filter(Boolean);
+  parts.forEach((p,i)=>{
+    const u=new SpeechSynthesisUtterance(p);
+    if(briefVoice) u.voice=briefVoice;
+    u.lang='ar-SA';
+    u.rate = 1.04 + Math.random()*0.10;      // hurried
+    u.pitch= 1.22 + Math.random()*0.12;      // tight throat
+    u.volume=1;
+    if(i>0) u.onstart=()=>{ if(on&&AC) nburst({dur:.26,type:'bandpass',f0:300,f1:760,q:1.5,vol:.075}); };
+    setTimeout(()=>{ try{ speechSynthesis.speak(u); }catch(e){} }, i*40);
+  });
+}
+
 function thump(v){
   if(!on||!AC) return;
   const now=AC.currentTime;
@@ -2150,6 +2395,7 @@ document.getElementById('outroRedo').addEventListener('click',()=>endOutro(true)
 function boot(saved){
   initGL();
   bindPad();
+  bindStick();
   if(saved&&saved.counters) counters=saved.counters;
   if(saved&&saved.strain) strain=saved.strain;
   if(saved&&saved.rescue) rescue=saved.rescue;
