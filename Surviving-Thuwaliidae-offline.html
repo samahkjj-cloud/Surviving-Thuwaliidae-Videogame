@@ -3127,13 +3127,21 @@ let outro=null;
 function outroBeats(){
   const n=rescue.saved.length, names=rescue.saved.slice();
   const who=n===0?'لا أحد':n===1?names[0]:names.slice(0,-1).join(' و')+' و'+names[names.length-1];
-  const sick=n===0?'ولا أحد معك لتراقبه.':n===1?`و${names[0]} لم يرمش منذ أن ركب.`:'ولا أحد منهم يرتجف من البرد. ولا واحد.';
+  // the first symptom is that nothing is wrong: no shivering, no blinking
+  const sick = n===0 ? 'ولا أحد معك لتراقبه.'
+             : n===1 ? `وعينا ${names[0]} لم ترمشا منذ أن ركبنا.`
+                     : 'ولا أحد منهم يرتجف من البرد. ولا واحد.';
+  // and then it is not subtle any more. this is the line the whole game was for
+  const turn = n===0 ? 'وأتجنّب النظر إلى انعكاسي في الماء.'
+             : n===1 ? `أرى تغيّراً يحدث في عينَي ${names[0]}، وجوعاً يشبه الذي في أعين الوحوش.`
+                     : 'أرى تغيّراً يحدث في أعينهم، وجوعاً يشبه الذي في أعين الوحوش.';
   return [
-    {at:0.5, hold:3.2,text:`دفعتَ القارب · نجا ${n} من أربعة`},
-    {at:4.2, hold:3.4,text:n?`${who} معك على الماء`:'وحدك على الماء'},
-    {at:8.0, hold:3.6,text:sick},
-    {at:12.0,hold:3.6,text:'الطفيلي مصدره الماء — ونحن أتينا من الماء'},
-    {at:16.0,hold:3.0,text:'كان القارب هو المكان الآمن'}
+    {at:0.5, hold:3.0,text:`دفعتَ القارب · نجا ${n} من أربعة`},
+    {at:3.9, hold:3.2,text:n?`${who} معك على الماء`:'وحدك على الماء'},
+    {at:7.4, hold:3.4,text:sick},
+    {at:11.0,hold:4.0,text:turn},
+    {at:15.2,hold:2.6,text:'الطفيلي مصدره الماء — ونحن أتينا من الماء'},
+    {at:18.0,hold:2.4,text:n?'لم أُنقذهم من الشاطئ. أخرجتُهم معي إلى الماء.':'كان القارب هو المكان الآمن'}
   ];
 }
 function startOutro(){
