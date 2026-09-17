@@ -2494,75 +2494,145 @@ function hush(depth,hold){
 function beep(f,dur,vol){ if(on&&AC) vtone({type:'square',f0:f,f1:f*.8,dur,vol,cut:2200}); }
 
 /* chase score */
-const BPM=128,STEP=60/BPM/4,ROOT=55;
-const ARP=[0,3,7,10,12,10,7,3];
-const BASS=[0,0,3,0,0,0,-2,0,0,0,5,0,3,3,-2,0];
-let mus={playing:false,step:0,next:0,timer:null,gain:null,level:0};
+/* ============================================================
+   the score: dread first, panic second.
+   a detuned tritone drone underneath everything; the beat only arrives
+   once something is actually hunting you.
+   ============================================================ */
+const BPM=132, STEP=60/BPM/4, ROOT=55;          // A1
+const TRITONE=Math.pow(2,6/12);
+// phrygian / diminished shapes — semitone and tritone, the two intervals
+// the ear refuses to settle into
+const ARP =[0,1,6,7,12,7,6,1];
+const BASS=[0,0,1,0, 0,0,-1,0, 0,0,6,0, 1,1,-1,0];
+
+let mus={playing:false,step:0,next:0,timer:null,gain:null,level:0,
+         droneA:null,droneB:null,droneGain:null,droneFilt:null,lastBraam:0};
+
 function musicInit(){
   if(mus.gain) return;
   mus.gain=AC.createGain(); mus.gain.gain.value=0;
   const comp=AC.createDynamicsCompressor();
-  comp.threshold.value=-18; comp.ratio.value=6;
+  comp.threshold.value=-20; comp.ratio.value=7;
   mus.gain.connect(comp).connect(master);
+
+  // the drone: two saws a tritone apart, detuned so they beat against each other
+  mus.droneFilt=AC.createBiquadFilter();
+  mus.droneFilt.type='lowpass'; mus.droneFilt.frequency.value=180; mus.droneFilt.Q.value=6;
+  mus.droneGain=AC.createGain(); mus.droneGain.gain.value=0;
+  mus.droneFilt.connect(mus.droneGain).connect(mus.gain);
+
+  mus.droneA=AC.createOscillator(); mus.droneA.type='sawtooth';
+  mus.droneA.frequency.value=ROOT/2;
+  mus.droneB=AC.createOscillator(); mus.droneB.type='sawtooth';
+  mus.droneB.frequency.value=(ROOT/2)*TRITONE;
+  mus.droneB.detune.value=14;                    // the sour beat
+  mus.droneA.connect(mus.droneFilt); mus.droneB.connect(mus.droneFilt);
+  // a slow sweep so the drone never sits still
+  const lfo=AC.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.055;
+  const lg=AC.createGain(); lg.gain.value=95;
+  lfo.connect(lg).connect(mus.droneFilt.frequency);
+  mus.droneA.start(); mus.droneB.start(); lfo.start();
 }
 function note(s){ return ROOT*Math.pow(2,s/12); }
-function mKick(t0){
+
+function mKick(t0,hard){
   const o=AC.createOscillator(),g=AC.createGain();
-  o.type='sine'; o.frequency.setValueAtTime(150,t0);
-  o.frequency.exponentialRampToValueAtTime(42,t0+.09);
-  g.gain.setValueAtTime(.9,t0); g.gain.exponentialRampToValueAtTime(.0001,t0+.26);
-  o.connect(g).connect(mus.gain); o.start(t0); o.stop(t0+.28);
+  o.type='sine'; o.frequency.setValueAtTime(hard?165:120,t0);
+  o.frequency.exponentialRampToValueAtTime(hard?36:30,t0+(hard?.10:.16));
+  g.gain.setValueAtTime(hard?1:.72,t0);
+  g.gain.exponentialRampToValueAtTime(.0001,t0+(hard?.30:.42));
+  o.connect(g).connect(mus.gain); o.start(t0); o.stop(t0+.44);
+}
+/* a low detuned stab — the sound a big thing makes when it notices you */
+function mBraam(t0){
+  for(const d of [0,17,-13]){
+    const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
+    o.type='sawtooth'; o.frequency.value=ROOT/2; o.detune.value=d;
+    f.type='lowpass'; f.frequency.setValueAtTime(900,t0);
+    f.frequency.exponentialRampToValueAtTime(140,t0+1.1);
+    g.gain.setValueAtTime(.0001,t0);
+    g.gain.exponentialRampToValueAtTime(.19,t0+.05);
+    g.gain.exponentialRampToValueAtTime(.0001,t0+1.25);
+    o.connect(f).connect(g).connect(mus.gain); o.start(t0); o.stop(t0+1.3);
+  }
+}
+/* metal dragged on metal, high and thin */
+function mScrape(t0){
+  const s=AC.createBufferSource(); s.buffer=NOISE; s.loop=true;
+  s.playbackRate.value=.6+Math.random()*.5;
+  const f=AC.createBiquadFilter(); f.type='bandpass'; f.Q.value=18;
+  f.frequency.setValueAtTime(2600+Math.random()*1800,t0);
+  f.frequency.exponentialRampToValueAtTime(900,t0+.55);
+  const g=AC.createGain();
+  g.gain.setValueAtTime(.0001,t0);
+  g.gain.exponentialRampToValueAtTime(.05,t0+.08);
+  g.gain.exponentialRampToValueAtTime(.0001,t0+.6);
+  s.connect(f).connect(g).connect(mus.gain); s.start(t0); s.stop(t0+.65);
 }
 function mHat(t0,open){
   const s=AC.createBufferSource(); s.buffer=NOISE; s.loop=true;
-  const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=7200;
-  const g=AC.createGain(), d=open?.15:.045;
-  g.gain.setValueAtTime(open?.16:.10,t0);
+  const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=8200;
+  const g=AC.createGain(), d=open?.13:.035;
+  g.gain.setValueAtTime(open?.12:.075,t0);
   g.gain.exponentialRampToValueAtTime(.0001,t0+d);
   s.connect(f).connect(g).connect(mus.gain); s.start(t0); s.stop(t0+d+.02);
 }
 function mClap(t0){
   const s=AC.createBufferSource(); s.buffer=NOISE; s.loop=true;
-  const f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1700; f.Q.value=1.1;
+  const f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1500; f.Q.value=1.3;
   const g=AC.createGain();
   g.gain.setValueAtTime(.0001,t0);
-  g.gain.exponentialRampToValueAtTime(.42,t0+.006);
-  g.gain.exponentialRampToValueAtTime(.0001,t0+.17);
-  s.connect(f).connect(g).connect(mus.gain); s.start(t0); s.stop(t0+.2);
+  g.gain.exponentialRampToValueAtTime(.40,t0+.005);
+  g.gain.exponentialRampToValueAtTime(.0001,t0+.20);
+  s.connect(f).connect(g).connect(mus.gain); s.start(t0); s.stop(t0+.22);
 }
 function mBass(t0,semi){
   const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
-  o.type='sawtooth'; o.frequency.value=note(semi);
-  f.type='lowpass'; f.Q.value=7;
-  f.frequency.setValueAtTime(1400,t0);
-  f.frequency.exponentialRampToValueAtTime(220,t0+STEP*1.6);
+  o.type='sawtooth'; o.frequency.value=note(semi); o.detune.value=-8;
+  f.type='lowpass'; f.Q.value=9;
+  f.frequency.setValueAtTime(1500,t0);
+  f.frequency.exponentialRampToValueAtTime(190,t0+STEP*1.6);
   g.gain.setValueAtTime(.0001,t0);
-  g.gain.exponentialRampToValueAtTime(.30,t0+.012);
-  g.gain.exponentialRampToValueAtTime(.0001,t0+STEP*1.85);
+  g.gain.exponentialRampToValueAtTime(.32,t0+.010);
+  g.gain.exponentialRampToValueAtTime(.0001,t0+STEP*1.9);
   o.connect(f).connect(g).connect(mus.gain); o.start(t0); o.stop(t0+STEP*2);
 }
+/* the arp is two detuned saws, not a clean square — it should grate */
 function mArp(t0,semi){
-  const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
-  o.type='square'; o.frequency.value=note(semi+24);
-  f.type='bandpass'; f.frequency.value=note(semi+24)*2.2; f.Q.value=3.2;
-  g.gain.setValueAtTime(.0001,t0);
-  g.gain.exponentialRampToValueAtTime(.13,t0+.008);
-  g.gain.exponentialRampToValueAtTime(.0001,t0+STEP*1.4);
-  o.connect(f).connect(g).connect(mus.gain); o.start(t0); o.stop(t0+STEP*1.5);
+  for(const d of [-11,11]){
+    const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
+    o.type='sawtooth'; o.frequency.value=note(semi+24); o.detune.value=d;
+    f.type='bandpass'; f.frequency.value=note(semi+24)*2.4; f.Q.value=5;
+    g.gain.setValueAtTime(.0001,t0);
+    g.gain.exponentialRampToValueAtTime(.075,t0+.006);
+    g.gain.exponentialRampToValueAtTime(.0001,t0+STEP*1.5);
+    o.connect(f).connect(g).connect(mus.gain); o.start(t0); o.stop(t0+STEP*1.6);
+  }
 }
+
 function musicTick(){
   if(!on||!AC||!mus.playing) return;
-  // a slow phone lets the scheduler fall behind; without this resync the loop
-  // tries to schedule hundreds of notes in the past and the track goes silent
   if(mus.next < AC.currentTime - .05) mus.next = AC.currentTime + .05;
   const ahead=AC.currentTime+.25;
   while(mus.next<ahead){
-    const t0=mus.next,s=mus.step,L=mus.level;
-    if(s%4===0) mKick(t0);
-    if(L>.30){ mHat(t0,s%4===2); if(s%8===4) mClap(t0); }
-    if(L>.45&&s%2===0) mBass(t0,BASS[s%16]);
-    if(L>.72) mArp(t0,ARP[s%8]);
-    if(L>.88&&s%16===15){ mClap(t0); mClap(t0+STEP*.5); }
+    const t0=mus.next, s=mus.step, L=mus.level;
+
+    // under ~.35 there is no beat at all: only the drone, a slow heart of a kick,
+    // and metal somewhere in the dark
+    if(L<=.36){
+      if(s%16===0) mKick(t0,false);
+      if(s%32===20 && Math.random()<.5) mScrape(t0);
+    } else {
+      if(s%4===0) mKick(t0, L>.75);
+      if(L>.45){ mHat(t0, s%4===2); if(s%8===4) mClap(t0); }
+      if(L>.55 && s%2===0) mBass(t0,BASS[s%16]);
+      if(L>.78) mArp(t0,ARP[s%8]);
+      if(L>.88 && s%16===15){ mClap(t0); mClap(t0+STEP*.5); }
+    }
+    // the stab lands on its own clock, so it never becomes predictable
+    if(L>.5 && t0-mus.lastBraam > 5.5+Math.random()*7){ mus.lastBraam=t0; mBraam(t0); }
+
     mus.next+=STEP; mus.step=(s+1)%64;
   }
 }
@@ -2577,6 +2647,7 @@ function musicStop(){
   mus.playing=false;
   if(mus.timer){ clearInterval(mus.timer); mus.timer=null; }
   if(mus.gain&&AC) mus.gain.gain.setTargetAtTime(0,AC.currentTime,.25);
+  if(mus.droneGain&&AC) mus.droneGain.gain.setTargetAtTime(0,AC.currentTime,.3);
 }
 function musicSet(dt,want){
   if(!on||!AC) return;
@@ -2584,6 +2655,12 @@ function musicSet(dt,want){
   if(mus.level>.06){
     musicStart(); musicInit();
     mus.gain.gain.setTargetAtTime(Math.min(.92,mus.level*.92),AC.currentTime,.18);
+    // the drone is loudest while you are merely being stalked, and pulls back a
+    // little once the beat takes over — dread and panic should not fight
+    const dr = mus.level<.4 ? .30 : .30 - (mus.level-.4)*.18;
+    mus.droneGain.gain.setTargetAtTime(Math.max(.10,dr),AC.currentTime,.5);
+    mus.droneFilt.Q.value = 6 + mus.level*5;
+    mus.droneB.detune.setTargetAtTime(10 + mus.level*26, AC.currentTime, .8);
   } else if(mus.playing) musicStop();
 }
 const sndBtn=document.getElementById('sndBtn');
