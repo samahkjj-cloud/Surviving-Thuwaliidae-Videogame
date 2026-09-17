@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<meta name="description" content="نموذج أولي ثلاثي الأبعاد بمنظور أول — Surviving Thuwaliidae">
-<style>
-  :root{color-scheme:dark}
-  html,body{margin:0}
-  img{max-width:100%}
-  [hidden]{display:none!important}
-</style>
+<meta name="description" content="لعبة نجاة ورعب بمنظور أول على ساحل البحر الأحمر.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>html,body{margin:0;background:#000;color:#c6d0d3;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Surviving Thuwaliidae</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <title>Surviving Thuwaliidae</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1540,7 +1540,7 @@ function showVeil(eyebrow,title,body,label,fn){
 /* ============================================================
    WebGL scene — real geometry, real lights, real shadows
    ============================================================ */
-let renderer,scene,camera,torch,hemi,ambientL,signLight,gateLight,viewModel,lantern,lanternMesh,lanternGlass;
+let renderer,scene,camera,torch,hemi,ambientL,signLight,gateLight,viewModel,lantern,lanternMesh,lanternGlass,seaFoam;
 let dyn={infected:[],survivors:[],items:[]};
 let texCache=new Map();
 
@@ -1686,20 +1686,26 @@ function makeHuman(p){
   return parts;
 }
 
-/* a dead fish: the thing this whole outbreak came out of */
-let fishGeo=null, fishTailGeo=null, fishMatA=null, fishMatB=null;
+/* the fish this whole outbreak came out of — and some of them are not done yet */
+let fishGeo=null, fishTailGeo=null, fishMats=null;
 function makeFish(){
   if(!fishGeo){
     fishGeo=new THREE.SphereGeometry(.11,10,7);
     fishGeo.scale(2.2,.62,.95);
     fishTailGeo=new THREE.ConeGeometry(.085,.13,4);
-    fishMatA=new THREE.MeshStandardMaterial({color:0x9aa48f,roughness:.45,metalness:.30});
-    fishMatB=new THREE.MeshStandardMaterial({color:0x8e7f6a,roughness:.62,metalness:.18});
+    fishMats=[
+      new THREE.MeshStandardMaterial({color:0xd4692a,roughness:.40,metalness:.34}), // rust orange
+      new THREE.MeshStandardMaterial({color:0xe07a2c,roughness:.44,metalness:.28}), // brighter
+      new THREE.MeshStandardMaterial({color:0x5f8a3e,roughness:.50,metalness:.22}), // sick green
+      new THREE.MeshStandardMaterial({color:0x7aa246,roughness:.46,metalness:.26}), // pale green
+      new THREE.MeshStandardMaterial({color:0xb8853a,roughness:.52,metalness:.20})  // turning
+    ];
   }
   const g=new THREE.Group();
-  const body=new THREE.Mesh(fishGeo, Math.random()<.5?fishMatA:fishMatB);
+  const mat=fishMats[(Math.random()*fishMats.length)|0];
+  const body=new THREE.Mesh(fishGeo,mat);
   body.castShadow=true; body.receiveShadow=true;
-  const tail=new THREE.Mesh(fishTailGeo, body.material);
+  const tail=new THREE.Mesh(fishTailGeo,mat);
   tail.position.x=-.27; tail.rotation.z=Math.PI/2; tail.scale.set(1,.9,.5);
   tail.castShadow=true;
   g.add(body); g.add(tail);
@@ -1815,17 +1821,40 @@ function buildScene(g){
     scene.background=null;
   }
 
-  // the sea, on the far side of the beach
+  // the sea: Red Sea blue-green, wet and reflective, with the sunset only
+  // catching its surface rather than staining the whole body of water
   if(g.sky==='beach'||g.sky==='night'){
     const seaMat = g.sunset
-      ? new THREE.MeshStandardMaterial({color:0x7a4436,roughness:.18,metalness:.55,
-          emissive:0x2a1208,emissiveIntensity:.5})
-      : new THREE.MeshStandardMaterial({color:g.sky==='night'?0x0a1418:0x46585f,roughness:.35,metalness:.2});
-    const sea=new THREE.Mesh(new THREE.PlaneGeometry(WX(g.W)*4,200),seaMat);
+      ? new THREE.MeshStandardMaterial({color:0x14647f,roughness:.09,metalness:.80,
+          emissive:0x09415a,emissiveIntensity:.55})
+      : new THREE.MeshStandardMaterial({color:g.sky==='night'?0x071a24:0x1d5468,
+          roughness:.14,metalness:.7,emissive:0x03141c,emissiveIntensity:.3});
+    const sea=new THREE.Mesh(new THREE.PlaneGeometry(WX(g.W)*4,200,1,1),seaMat);
     sea.rotation.x=-Math.PI/2;
     sea.position.set(WX(g.W)/2,-0.12,-100+WZ(0));
     scene.add(sea);
-  }
+
+    // a band of shallows where it meets the sand: paler, greener, breaking
+    const shallowMat=new THREE.MeshStandardMaterial({
+      color: g.sky==='night'?0x0d2c38:0x2e8ea0, roughness:.22, metalness:.55,
+      transparent:true, opacity:.88,
+      emissive:g.sky==='night'?0x04161d:0x0d3b45, emissiveIntensity:.35});
+    const shallow=new THREE.Mesh(new THREE.PlaneGeometry(WX(g.W)*4,WX(150)),shallowMat);
+    shallow.rotation.x=-Math.PI/2;
+    shallow.position.set(WX(g.W)/2,-0.06,WZ(0)-WX(62));
+    scene.add(shallow);
+
+    // foam along the waterline
+    const foamMat=new THREE.MeshStandardMaterial({color:0xdfeef1,roughness:.85,
+      transparent:true,opacity:g.sky==='night'?.30:.62});
+    const foam=new THREE.Mesh(new THREE.PlaneGeometry(WX(g.W)*4,WX(26)),foamMat);
+    foam.rotation.x=-Math.PI/2;
+    foam.position.set(WX(g.W)/2,-0.018,WZ(0)+WX(6));
+    foam.userData.z0=foam.position.z;
+    foam.userData.op0=foamMat.opacity;
+    scene.add(foam);
+    seaFoam=foam;
+  } else seaFoam=null;
 
   // the wrecks: a broken hull heeled over on the reef, with a snapped mast
   for(const w of (g.wrecks||[])){
@@ -2052,14 +2081,20 @@ function buildScene(g){
     const h=makeHuman({skin:0xbc9c80,cloth:0xa9a698,vis:true});
     scene.add(h.grp); dyn.survivors.push({s,h});
   }
-  // the catch, left where it fell
+  // the catch, left where it fell — about a third of it still moves
+  dyn.fish=[];
   for(const f of (g.fish||[])){
     const m=makeFish();
-    m.position.set(WX(f.x), f.onStall?WX(66):WX(3), WZ(f.y));
+    const y0=f.onStall?WX(66):WX(3);
+    m.position.set(WX(f.x), y0, WZ(f.y));
     m.rotation.y=f.r;
     m.rotation.z=(Math.random()-.5)*.5;          // half of them belly-up
     m.scale.setScalar(f.s);
     scene.add(m);
+    if(Math.random()<.34){
+      dyn.fish.push({m, y0, base:m.rotation.z, yaw:f.r,
+                     t:Math.random()*5, next:.4+Math.random()*3.2, fit:0});
+    }
   }
 
   for(const it of g.items){
@@ -2180,6 +2215,32 @@ function syncScene(g,dt){
       }
     }
   }
+  // the waterline creeps up the sand and slides back — two swells at different
+  // periods so it never reads as a loop
+  if(seaFoam){
+    const t=performance.now()*.001;
+    seaFoam.position.z = seaFoam.userData.z0 +
+      (Math.sin(t*.55)*.9 + Math.sin(t*.23+1.7)*.45)*WX(9);
+    seaFoam.material.opacity = seaFoam.userData.op0 *
+      (.72 + .28*Math.abs(Math.sin(t*.55)));
+  }
+
+  // the ones that are not finished dying: a sudden flap, then stillness again
+
+  for(const f of (dyn.fish||[])){
+    f.next-=dt;
+    if(f.next<=0){ f.next=1.1+Math.random()*4.5; f.fit=.30+Math.random()*.34; }
+    if(f.fit>0){
+      f.fit=Math.max(0,f.fit-dt*1.7);
+      f.t+=dt*34;
+      f.m.rotation.z = f.base + Math.sin(f.t)*f.fit*1.5;
+      f.m.rotation.y = f.yaw  + Math.sin(f.t*.7)*f.fit*.6;
+      f.m.position.y = f.y0   + Math.abs(Math.sin(f.t*.5))*f.fit*.07;
+    } else if(f.m.position.y!==f.y0){
+      f.m.rotation.z=f.base; f.m.rotation.y=f.yaw; f.m.position.y=f.y0;
+    }
+  }
+
   // pickups
   for(const e of dyn.items){
     e.m.visible=!e.it.taken;
@@ -2434,15 +2495,30 @@ function ambience(dt,screen){
 
 /* ---- the mission, spoken by someone who is not handling this well ---- */
 const BRIEF={
-  1:'احذر من الزومبي، واختر أسلحة نجاتك بعناية!',
-  2:'يجب أن تنقذ المصابين من الزومبي.',
-  3:'سبيل النجاة قريب، لتُنقذ الفتاة الصغيرة أولاً.'
+  1:'دير بالك من الزومبي، واختر سلاحك زين، حياتك معلقة فيه.',
+  2:'لازم تطلع المصابين من بين الزومبي، لا تخلي أحد ورا.',
+  3:'طريق النجاة قريب، بس أنقذ البنت الصغيرة أول.'
 };
 let briefVoice=null;
+// a Saudi voice if the device has one, a Gulf one next, any Arabic last.
+// named Saudi voices (Naayf, Hamed, Zariyah, Majed) are scored above a bare
+// ar-SA tag, because some devices label a Levantine voice ar-SA
+const SAUDI_NAMES=/naayf|nayef|hamed|zariyah|majed|shakir|laila|maged/i;
+const GULF=/ar[-_](AE|KW|BH|QA|OM)/i;
 function pickArabicVoice(){
   if(!('speechSynthesis' in window)) return null;
-  const vs=speechSynthesis.getVoices()||[];
-  return vs.find(v=>/ar[-_]SA/i.test(v.lang)) || vs.find(v=>/^ar/i.test(v.lang)) || null;
+  const vs=(speechSynthesis.getVoices()||[]).filter(v=>/^ar/i.test(v.lang));
+  if(!vs.length) return null;
+  const score=v=>{
+    let k=0;
+    if(/ar[-_]SA/i.test(v.lang)) k+=6;
+    else if(GULF.test(v.lang))   k+=3;
+    if(SAUDI_NAMES.test(v.name||'')) k+=4;
+    if(/ar[-_]EG/i.test(v.lang)) k-=2;   // the most common voice, and the least Saudi
+    if(v.localService) k+=1;             // local voices articulate better than network ones
+    return k;
+  };
+  return vs.slice().sort((a,b)=>score(b)-score(a))[0];
 }
 if('speechSynthesis' in window){
   speechSynthesis.onvoiceschanged=()=>{ briefVoice=pickArabicVoice(); };
@@ -2457,8 +2533,8 @@ function speakBrief(n){
   const u=new SpeechSynthesisUtterance(line.replace(/…/g,'،'));
   if(briefVoice) u.voice=briefVoice;
   u.lang='ar-SA';
-  u.rate  = 0.88;    // unhurried enough to follow
-  u.pitch = 0.94;    // low and tired, not shrill
+  u.rate  = 0.82;    // slow enough that every word separates
+  u.pitch = 0.92;    // low and tired, not shrill
   u.volume= 0.92;
   // pull the score and the surf down underneath the words, then let them back up
   const duck=(v,t)=>{ if(on&&AC){ if(mus.gain) mus.gain.gain.setTargetAtTime(v*.45,AC.currentTime,t);
