@@ -2610,27 +2610,22 @@ function ambience(dt,screen){
 
 /* ---- the mission, spoken by someone who is not handling this well ---- */
 const BRIEF={
-  1:'دير بالك من الزومبي، واختر سلاحك زين، حياتك معلقة فيه.',
-  2:'لازم تطلع المصابين من بين الزومبي، لا تخلي أحد ورا.',
-  3:'طريق النجاة قريب، بس أنقذ البنت الصغيرة أول.'
+  1:'احذر من الزومبي، واختر أسلحة نجاتك بعناية.',
+  2:'عليك أن تنقذ المصابين من بين الزومبي، ولا تترك أحداً خلفك.',
+  3:'سبيل النجاة قريب، ولكن أنقذ الفتاة الصغيرة أولاً.'
 };
 let briefVoice=null;
 // a Saudi voice if the device has one, a Gulf one next, any Arabic last.
 // named Saudi voices (Naayf, Hamed, Zariyah, Majed) are scored above a bare
 // ar-SA tag, because some devices label a Levantine voice ar-SA
-const SAUDI_NAMES=/naayf|nayef|hamed|zariyah|majed|shakir|laila|maged/i;
-const GULF=/ar[-_](AE|KW|BH|QA|OM)/i;
 function pickArabicVoice(){
   if(!('speechSynthesis' in window)) return null;
   const vs=(speechSynthesis.getVoices()||[]).filter(v=>/^ar/i.test(v.lang));
   if(!vs.length) return null;
   const score=v=>{
     let k=0;
-    if(/ar[-_]SA/i.test(v.lang)) k+=6;
-    else if(GULF.test(v.lang))   k+=3;
-    if(SAUDI_NAMES.test(v.name||'')) k+=4;
-    if(/ar[-_]EG/i.test(v.lang)) k-=2;   // the most common voice, and the least Saudi
-    if(v.localService) k+=1;             // local voices articulate better than network ones
+    if(v.localService) k+=3;                 // clearer, and it never waits on a network
+    if(/ar[-_]SA/i.test(v.lang)) k+=1;       // a tie-break, nothing more
     return k;
   };
   return vs.slice().sort((a,b)=>score(b)-score(a))[0];
