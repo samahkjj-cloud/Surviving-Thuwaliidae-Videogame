@@ -1885,7 +1885,7 @@ function syncWeapon(g){
   if(k==='none') return;
   const m=makeWeaponMesh(k);
   m.userData.kind=k;
-  m.scale.setScalar(.85);
+  m.scale.setScalar(k==="spear"?.46:.60);
   camera.add(m);
   viewModel=m;
 }
@@ -1992,8 +1992,8 @@ function syncScene(g,dt){
   syncWeapon(g);
   if(viewModel){
     const lunge=Math.sin(Math.min(1,(P.swing/(P.weapon.cd||1))/.75)*Math.PI);
-    viewModel.position.set(.30-lunge*.10, -.42+P.bob*.6-lunge*.05, -.52+lunge*.26);
-    viewModel.rotation.set(-1.15+lunge*.55, .25, .30);
+    viewModel.position.set(.34-lunge*.09, -.40+P.bob*.6-lunge*.05, -.46+lunge*.22);
+    viewModel.rotation.set(-1.28+lunge*.52, .30, .34);
   }
 }
 
