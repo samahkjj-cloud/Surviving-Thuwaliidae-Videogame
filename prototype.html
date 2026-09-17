@@ -2,7 +2,7 @@
 <html lang="ar">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#000000">
 <meta name="description" content="نموذج أولي ثلاثي الأبعاد بمنظور أول — Surviving Thuwaliidae">
 <style>
@@ -57,12 +57,26 @@
                     95% 100%,79% 98.9%,63% 100%,47% 98.8%,31% 99.8%,16% 98.7%,4% 99.9%,0 98%,
                     .8% 78%,0 61%,.9% 42%,0 24%,.7% 9%);
 }
+/* blood soaks the page: a thumbprint at the edge, a spatter, a few flecks */
 .paper::after{
   content:"";position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply;
   background:
-    radial-gradient(ellipse 70px 30px at 10% 91%, rgba(142,31,24,.36), transparent 70%),
-    radial-gradient(ellipse 36px 54px at 93% 14%, rgba(142,31,24,.28), transparent 72%),
-    radial-gradient(ellipse 22px 16px at 68% 96%, rgba(142,31,24,.30), transparent 74%);
+    radial-gradient(ellipse 86px 40px at 9% 92%,  rgba(126,22,17,.58), transparent 68%),
+    radial-gradient(ellipse 44px 66px at 94% 13%, rgba(126,22,17,.48), transparent 70%),
+    radial-gradient(ellipse 30px 22px at 68% 97%, rgba(140,28,21,.52), transparent 72%),
+    radial-gradient(circle 9px  at 24% 18%, rgba(126,22,17,.66), transparent 78%),
+    radial-gradient(circle 5px  at 31% 24%, rgba(126,22,17,.58), transparent 80%),
+    radial-gradient(circle 3px  at 19% 27%, rgba(126,22,17,.52), transparent 80%),
+    radial-gradient(circle 6px  at 80% 62%, rgba(126,22,17,.50), transparent 78%),
+    radial-gradient(circle 3.5px at 74% 70%, rgba(126,22,17,.46), transparent 80%),
+    radial-gradient(ellipse 14px 5px at 52% 6%, rgba(126,22,17,.40), transparent 76%);
+}
+/* a smear dragged by a thumb along the lower edge */
+.paper::before{
+  content:"";position:absolute;left:6%;right:38%;bottom:3%;height:16px;pointer-events:none;
+  mix-blend-mode:multiply;border-radius:60% 40% 55% 45%/70% 60% 40% 30%;
+  background:linear-gradient(95deg, rgba(126,22,17,.44), rgba(126,22,17,.16) 55%, transparent);
+  filter:blur(1.2px);
 }
 .ink{ font-family:var(--hand); color:#14110d; }
 .shaky{ filter:url(#smudge); }
@@ -217,11 +231,15 @@ canvas#cv{display:block;width:100%;height:100%}
 .veil .eyebrow{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:#7a6d58;text-transform:uppercase;direction:ltr}
 
 button{font-family:inherit}
-.btn{font-family:var(--ui);font-weight:500;font-size:14px;color:var(--void);background:var(--hull);
-  border:none;padding:11px 26px;border-radius:2px;cursor:pointer;transition:background .15s ease,transform .15s ease}
-.btn:hover{background:#b9d9e2}
-.btn:active{transform:translateY(1px)}
-.btn:focus-visible{outline:2px solid var(--paper);outline-offset:3px}
+/* the start controls sit on paper, so they read as pressed ink, not a cyan chip */
+.btn{font-family:var(--ui);font-weight:500;font-size:14px;color:#241d16;
+  background:transparent;border:1px solid rgba(20,17,13,.55);
+  padding:11px 28px;border-radius:2px;cursor:pointer;
+  transition:background .15s ease,border-color .15s ease,transform .15s ease;
+  -webkit-tap-highlight-color:transparent}
+.btn:hover{background:rgba(20,17,13,.10);border-color:rgba(20,17,13,.8)}
+.btn:active{transform:translateY(1px);background:rgba(20,17,13,.16)}
+.btn:focus-visible{outline:2px solid var(--warn);outline-offset:3px}
 
 .intro{position:absolute;inset:0;overflow:hidden}
 .intro[hidden]{display:none!important}
@@ -288,6 +306,18 @@ button{font-family:inherit}
   box-shadow:0 16px 40px rgba(0,0,0,.66);
   background-image:repeating-linear-gradient(0deg,transparent,transparent 21px,rgba(25,20,16,.07) 21px,rgba(25,20,16,.07) 22px)}
 .book.open{transform:translateY(0) rotate(-.7deg);opacity:1;pointer-events:auto}
+/* the notebook has been handled with wet hands */
+.book::after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:1;mix-blend-mode:multiply;
+  background:
+    radial-gradient(ellipse 60px 34px at 92% 8%,  rgba(126,22,17,.50), transparent 70%),
+    radial-gradient(ellipse 40px 26px at 6% 88%,  rgba(126,22,17,.42), transparent 72%),
+    radial-gradient(circle 8px at 22% 34%, rgba(126,22,17,.52), transparent 78%),
+    radial-gradient(circle 4px at 28% 40%, rgba(126,22,17,.44), transparent 80%),
+    radial-gradient(circle 5px at 71% 58%, rgba(126,22,17,.46), transparent 78%),
+    radial-gradient(circle 3px at 64% 64%, rgba(126,22,17,.38), transparent 80%);
+}
+.book-bar,.book-scroll{position:relative;z-index:2}
 .book-bar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;
   padding:7px 8px 7px 11px;border-bottom:1px solid rgba(25,20,16,.24);background:rgba(25,20,16,.06)}
 .book-bar .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.15em;text-transform:uppercase;color:#6b5f52;direction:ltr}
@@ -343,7 +373,7 @@ button{font-family:inherit}
    corners and the home indicator never sit on top of anything.
    ============================================================ */
 @media (pointer:coarse){
-  html,body{overflow:hidden;height:100%}
+  html,body{overflow:hidden;height:100%;touch-action:none;-ms-touch-action:none}
   .shell{max-width:none;padding:0;margin:0}
   .masthead,.bar{display:none}
   .stage{
@@ -859,6 +889,7 @@ function buildCorniche(g){
   g.infected.push(mkInfected(1700,420,strain,.85));
   boat(g,150,220,260,96,0.25);
   g.P.x=1700; g.P.y=900; g.P.a=Math.PI;
+  g.P.weapon=WEAPONS.spear;          // you do not walk into the dark unarmed
   g.exit={x:20,y:120,w:200,h:180,locked:false};
 }
 
@@ -1492,8 +1523,8 @@ function makeHuman(p){
 
 function makeWeaponMesh(kind){
   const g=new THREE.Group();
-  const wood=new THREE.MeshStandardMaterial({color:0x8a7150,roughness:.9});
-  const steel=new THREE.MeshStandardMaterial({color:0xc8d2d6,roughness:.28,metalness:.85});
+  const wood=new THREE.MeshStandardMaterial({color:0x6a4a2c,roughness:.86,metalness:.02});
+  const steel=new THREE.MeshStandardMaterial({color:0x8f979c,roughness:.42,metalness:.92});
   if(kind==='knife'){
     const h=new THREE.Mesh(new THREE.CylinderGeometry(.018,.02,.11,8),wood); h.position.y=.05; g.add(h);
     const b=new THREE.Mesh(new THREE.ConeGeometry(.026,.20,4),steel); b.position.y=.20; g.add(b);
@@ -2165,18 +2196,21 @@ function speakBrief(n){
   try{ speechSynthesis.cancel(); }catch(e){}
   const line=BRIEF[n]; if(!line) return;
   if(!briefVoice) briefVoice=pickArabicVoice();
-  // broken into gasps, with a breath between each — the tremble is in the pacing
-  const parts=line.split('…').map(s=>s.trim()).filter(Boolean);
-  parts.forEach((p,i)=>{
-    const u=new SpeechSynthesisUtterance(p);
-    if(briefVoice) u.voice=briefVoice;
-    u.lang='ar-SA';
-    u.rate = 1.04 + Math.random()*0.10;      // hurried
-    u.pitch= 1.22 + Math.random()*0.12;      // tight throat
-    u.volume=1;
-    if(i>0) u.onstart=()=>{ if(on&&AC) nburst({dur:.26,type:'bandpass',f0:300,f1:760,q:1.5,vol:.075}); };
-    setTimeout(()=>{ try{ speechSynthesis.speak(u); }catch(e){} }, i*40);
-  });
+  // one steady utterance. chopping it into gasps and pitching it up made the
+  // words unintelligible and the delivery grating — the dread is in the writing
+  const u=new SpeechSynthesisUtterance(line.replace(/…/g,'،'));
+  if(briefVoice) u.voice=briefVoice;
+  u.lang='ar-SA';
+  u.rate  = 0.88;    // unhurried enough to follow
+  u.pitch = 0.94;    // low and tired, not shrill
+  u.volume= 0.92;
+  // pull the score and the surf down underneath the words, then let them back up
+  const duck=(v,t)=>{ if(on&&AC){ if(mus.gain) mus.gain.gain.setTargetAtTime(v*.45,AC.currentTime,t);
+                                  if(seaGain) seaGain.gain.setTargetAtTime(v*.03,AC.currentTime,t); } };
+  u.onstart=()=>duck(.35,.25);
+  u.onend=()=>duck(2.2,.9);
+  u.onerror=()=>duck(2.2,.9);
+  try{ speechSynthesis.speak(u); }catch(e){}
 }
 
 function thump(v){
@@ -2262,7 +2296,10 @@ function mArp(t0,semi){
 }
 function musicTick(){
   if(!on||!AC||!mus.playing) return;
-  const ahead=AC.currentTime+.14;
+  // a slow phone lets the scheduler fall behind; without this resync the loop
+  // tries to schedule hundreds of notes in the past and the track goes silent
+  if(mus.next < AC.currentTime - .05) mus.next = AC.currentTime + .05;
+  const ahead=AC.currentTime+.25;
   while(mus.next<ahead){
     const t0=mus.next,s=mus.step,L=mus.level;
     if(s%4===0) mKick(t0);
@@ -2300,13 +2337,24 @@ function armAudio(){
   if(armed) return;
   armed=true;
   audio();
+  // iOS keeps the context locked until something actually plays inside the
+  // gesture, so push one silent sample through first
+  try{
+    const b=AC.createBuffer(1,1,AC.sampleRate);
+    const s=AC.createBufferSource(); s.buffer=b;
+    s.connect(AC.destination); s.start(0);
+  }catch(e){}
   const go=()=>{ if(on&&seaGain) seaGain.gain.setTargetAtTime(.055,AC.currentTime,.5); };
   const p=AC.resume();
   if(p&&p.then) p.then(go,go); else go();
 }
 // whatever they touch first — the skip button, the start button, a key — starts it
-['pointerdown','keydown','touchstart'].forEach(ev=>
+['pointerdown','touchstart','touchend','click','keydown'].forEach(ev=>
   addEventListener(ev,armAudio,{passive:true}));
+// a phone that suspends the context on return must be woken again
+addEventListener('visibilitychange',()=>{
+  if(!document.hidden && on && AC && AC.state==='suspended'){ try{ AC.resume(); }catch(e){} }
+});
 
 sndBtn.addEventListener('click',e=>{
   on=!on;
@@ -2407,6 +2455,15 @@ addEventListener('keydown',e=>{
 });
 // a phone that loses focus should not keep playing in the dark
 addEventListener('visibilitychange',()=>{ if(document.hidden) setPause(true); });
+// pinch and double-tap zoom have no place in a fixed play frame
+['gesturestart','gesturechange','gestureend'].forEach(ev=>
+  addEventListener(ev,e=>e.preventDefault(),{passive:false}));
+let lastTap=0;
+addEventListener('touchend',e=>{
+  const now=Date.now();
+  if(now-lastTap<320) e.preventDefault();
+  lastTap=now;
+},{passive:false});
 
 // the pause panel mirrors the controls that the fullscreen layout hides
 document.getElementById('sndBtn2').addEventListener('click',()=>{ sndBtn.click(); });
