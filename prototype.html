@@ -744,9 +744,11 @@ function buildTextures(){
   // instead of ending on a drawn line
   TEX.shore=makeTex(8,256,(x,w,h)=>{
     const g=x.createLinearGradient(0,0,0,h);
-    g.addColorStop(0.00,'#ffffff');
-    g.addColorStop(0.55,'#e8e8e8');
-    g.addColorStop(0.82,'#6e6e6e');
+    g.addColorStop(0.00,'#000000');
+    g.addColorStop(0.16,'#8c8c8c');
+    g.addColorStop(0.38,'#f2f2f2');
+    g.addColorStop(0.62,'#ffffff');
+    g.addColorStop(0.84,'#6e6e6e');
     g.addColorStop(0.95,'#1c1c1c');
     g.addColorStop(1.00,'#000000');
     x.fillStyle=g; x.fillRect(0,0,w,h);
@@ -1889,7 +1891,7 @@ function buildScene(g){
       alphaMap:wtex(TEX.shore,1,1,true), transparent:true, depthWrite:false,
       color: night?0x5c8c96 : 0xcaf0ea,
       roughness:.2, metalness:.5,
-      emissive: night?0x05181f:0x1c6b6a, emissiveIntensity: night?.3:.55});
+      emissive: night?0x05181f:0x156057, emissiveIntensity: night?.3:.44});
     const shallow=new THREE.Mesh(new THREE.PlaneGeometry(W4,WX(150)),shallowMat);
     shallow.rotation.x=-Math.PI/2;
     shallow.position.set(WX(g.W)/2,-0.055,WZ(0)-WX(64));
