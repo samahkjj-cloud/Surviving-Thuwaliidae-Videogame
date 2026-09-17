@@ -977,8 +977,8 @@ function buildMarket(g){
     for(let c=0;c<6;c++){
       const x=250+c*250;
       if((r+c)%4===3) continue;
-      box(g,x,y,78,78,64,TEX.plank);
-      box(g,x,y+86,78,62,58,TEX.plank,.9);
+      box(g,x,y,78,78,34,TEX.plank);            // a trestle, not a wall
+      box(g,x,y+86,78,62,27,TEX.plank,.9);
     }
   }
   box(g,0,0,g.W,14,170,TEX.plaster);
@@ -1334,7 +1334,9 @@ function update(dt){
         P.atkCd = P.weapon.cd*1.6; P.swing=P.weapon.cd;
         stabTarget.stagger=.55; stabTarget.hitCd=.4;
         counters.engage += 2.0;
-        g.shake=.10; gruntEffort(); zHurt(panOf(g,stabTarget));
+        g.shake=.10; gruntEffort();
+        const sp=panOf(g,stabTarget);
+        swingSnd(P.weapon.key,sp); impact(P.weapon.key,sp,stabTarget.hp<=0); zHurt(sp);
         if(stabTarget.hp<=0) stabTarget.dead=true;
       } else {
         // bare hands: you cannot hurt it, only buy yourself a second
@@ -1343,6 +1345,7 @@ function update(dt){
         stabTarget.x+=Math.cos(a)*30; stabTarget.y+=Math.sin(a)*30;
         counters.engage += .5;
         g.shake=.06; gruntEffort();
+        impact('none',panOf(g,stabTarget),false);
         toast(g,'دفعته بيديك');
       }
     }
@@ -1395,7 +1398,8 @@ function update(dt){
       const a=Math.atan2(z.y-P.y,z.x-P.x);
       z.x+=Math.cos(a)*18; z.y+=Math.sin(a)*18;
       counters.engage+=1.2; g.shake=.05;
-      gruntEffort(); zHurt(panOf(g,z));
+      const zp=panOf(g,z);
+      gruntEffort(); swingSnd(wep.key,zp); impact(wep.key,zp,z.hp<=0); zHurt(zp);
       if(z.hp<=0){ z.dead=true; }
     }
     if(d<P.r+z.r+5&&P.iframe<=0&&z.stagger<=0&&z.atk<=0){ z.atk=1.5; damage(); }
@@ -1422,7 +1426,13 @@ function update(dt){
     return !z.dead;
   });
 
-  if(moving){ P.step+=dt*(P.running?5.2:3.1); if(P.step>=1){ P.step=0; footstep(g.screen,.035+Math.random()*.02,0); } }
+  if(moving){
+    P.step+=dt*(P.running?5.2:3.1);
+    if(P.step>=1){
+      P.step=0; P.footL=!P.footL;
+      footstep(g.screen,(P.running?.155:.10)+Math.random()*.03,P.footL?-.22:.22);
+    }
+  }
   breathing(dt,moving?1:0,g.dread,P.hp<=1?1:0);
 
   const target=nearest<1e8?Math.max(0,1-nearest/300):0;
@@ -2141,7 +2151,7 @@ function buildScene(g){
   dyn.fish=[];
   for(const f of (g.fish||[])){
     const m=makeFish();
-    const y0=f.onStall?WX(66):WX(3);
+    const y0=f.onStall?WX(36):WX(3);
     m.position.set(WX(f.x), y0, WZ(f.y));
     m.rotation.y=f.r;
     m.rotation.z=(Math.random()-.5)*.5;          // half of them belly-up
@@ -2467,10 +2477,44 @@ function gruntPain(){
   vtone({type:'sawtooth',f0:230+Math.random()*40,f1:118,dur:.52,vol:.115,cut:900,q:1.3,wobble:11,wobRate:9});
   nburst({dur:.46,type:'bandpass',f0:1300,f1:360,q:.8,vol:.075});
 }
-const STEP_SURFACE={1:{f0:1500,f1:420,q:.7,dur:.17},2:{f0:1050,f1:330,q:.8,dur:.14},3:{f0:2700,f1:880,q:1.3,dur:.10}};
+const STEP_SURFACE={
+  1:{f0:1500,f1:420,q:.7,dur:.17,thump: 95},            // sand: soft, no edge
+  2:{f0:1050,f1:330,q:.8,dur:.14,thump: 78,wet:true},   // market: rot underfoot
+  3:{f0:2700,f1:880,q:1.3,dur:.10,thump:130}            // tile: a hard slap
+};
+
 function footstep(screen,vol,pan){
   const s=STEP_SURFACE[screen]||STEP_SURFACE[2];
+  // the scuff across the surface
   nburst({dur:s.dur,type:'bandpass',f0:s.f0*(.85+Math.random()*.3),f1:s.f1,q:s.q,vol,pan,atk:.008});
+  // and the weight landing, which is what makes it a foot instead of a hiss
+  vtone({type:'sine',f0:s.thump*(.9+Math.random()*.2),f1:s.thump*.55,dur:.09,
+         vol:vol*.95,cut:260,q:.8,atk:.004,pan});
+  // the market floor answers back
+  if(s.wet) nburst({dur:.09,type:'bandpass',f0:2400+Math.random()*700,f1:820,q:2.2,
+                    vol:vol*.45,pan,atk:.004});
+}
+
+/* ---- the blow: air, then the hard part, then the body it landed in ---- */
+const HIT={
+  none :{f0:1500,f1:420,q:1.0,body:150,vol:.15},
+  knife:{f0:3300,f1:900,q:2.5,body:210,vol:.20},
+  oar  :{f0:1150,f1:250,q:1.0,body: 94,vol:.30},   // wood, and it is heavy
+  spear:{f0:2300,f1:520,q:1.9,body:126,vol:.27}    // steel going in
+};
+function swingSnd(key,pan){
+  const k=HIT[key]||HIT.none;
+  nburst({dur:.18,type:'bandpass',f0:k.f0*.55,f1:240,q:.75,vol:.085,pan,atk:.06});
+}
+function impact(key,pan,kill){
+  const k=HIT[key]||HIT.none;
+  nburst({dur:.085,type:'bandpass',f0:k.f0,f1:k.f1,q:k.q,vol:k.vol,pan,atk:.003});
+  vtone({type:'sine',f0:k.body,f1:k.body*.45,dur:.17,vol:k.vol*.95,cut:300,q:1,atk:.004,pan});
+  nburst({dur:.23,type:'lowpass',f0:900,f1:180,q:.7,vol:k.vol*.55,pan,atk:.014});
+  if(kill){                                        // it goes down heavily
+    vtone({type:'sawtooth',f0:72,f1:33,dur:.52,vol:.22,cut:190,q:1.1,atk:.006,pan});
+    nburst({dur:.36,type:'lowpass',f0:1400,f1:150,q:.8,vol:.17,pan,atk:.022});
+  }
 }
 function zGrowl(dist,pan){
   const v=Math.max(.012,.15*(1-Math.min(1,dist/340)));
@@ -2593,9 +2637,9 @@ function speakBrief(n){
   const u=new SpeechSynthesisUtterance(line.replace(/…/g,'،'));
   if(briefVoice) u.voice=briefVoice;
   u.lang='ar-SA';
-  u.rate  = 0.82;    // slow enough that every word separates
-  u.pitch = 0.92;    // low and tired, not shrill
-  u.volume= 0.92;
+  u.rate  = 0.92;    // steady. hesitation is what made it sound frightened
+  u.pitch = 0.86;    // lower and level — a voice that has already decided
+  u.volume= 1.0;
   // pull the score and the surf down underneath the words, then let them back up
   const duck=(v,t)=>{ if(on&&AC){ if(mus.gain) mus.gain.gain.setTargetAtTime(v*.45,AC.currentTime,t);
                                   if(seaGain) seaGain.gain.setTargetAtTime(v*.03,AC.currentTime,t); } };
@@ -2749,6 +2793,7 @@ function mArp(t0,semi){
 
 function musicTick(){
   if(!on||!AC||!mus.playing) return;
+  if(AC.state!=='running'){ try{ AC.resume(); }catch(e){} return; }
   if(mus.next < AC.currentTime - .05) mus.next = AC.currentTime + .05;
   const ahead=AC.currentTime+.25;
   while(mus.next<ahead){
@@ -2787,6 +2832,7 @@ function musicStop(){
 }
 function musicSet(dt,want){
   if(!on||!AC) return;
+  musicTick();                       // the frame loop is the reliable clock here
   mus.level+=(want-mus.level)*Math.min(1,dt*1.6);
   if(mus.level>.06){
     musicStart(); musicInit();
@@ -2822,8 +2868,39 @@ function armAudio(){
   addEventListener(ev,armAudio,{passive:true}));
 // a phone that suspends the context on return must be woken again
 addEventListener('visibilitychange',()=>{
-  if(!document.hidden && on && AC && AC.state==='suspended'){ try{ AC.resume(); }catch(e){} }
+  if(!document.hidden && on && AC && AC.state!=='running'){ try{ AC.resume(); }catch(e){} }
 });
+['pointerdown','touchend','keydown'].forEach(ev=>addEventListener(ev,()=>{
+  if(on&&AC&&AC.state!=='running'){ try{ AC.resume(); }catch(e){} }
+},{passive:true}));
+// last resort: something suspended it while nobody was touching anything
+setInterval(()=>{
+  if(on&&AC&&AC.state!=='running'&&!document.hidden){ try{ AC.resume(); }catch(e){} }
+},1500);
+
+// a way to see, from the console or a phone, whether sound is actually leaving
+// the mixer — "is the music broken" is otherwise unanswerable on someone's device
+window.__audioProbe=function(ms){
+  const r={ctx:AC?AC.state:'none',on,armed,playing:!!mus.playing,
+           level:+(mus.level||0).toFixed(3),
+           musicGain:mus.gain?+mus.gain.gain.value.toFixed(3):null,
+           master:master?+master.gain.value.toFixed(3):null};
+  if(!AC||!master) return Promise.resolve(r);
+  const an=AC.createAnalyser(); an.fftSize=2048;
+  master.connect(an);
+  const buf=new Float32Array(an.fftSize);
+  let peak=0, t0=performance.now();
+  return new Promise(res=>{
+    const step=()=>{
+      an.getFloatTimeDomainData(buf);
+      for(let i=0;i<buf.length;i++){ const v=Math.abs(buf[i]); if(v>peak) peak=v; }
+      if(performance.now()-t0 < (ms||900)) requestAnimationFrame(step);
+      else { try{ master.disconnect(an); }catch(e){} r.peak=+peak.toFixed(4);
+             r.audible=peak>0.003; res(r); }
+    };
+    step();
+  });
+};
 
 sndBtn.addEventListener('click',e=>{
   on=!on;
