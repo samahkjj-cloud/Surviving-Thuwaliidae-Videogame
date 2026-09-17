@@ -2859,7 +2859,15 @@ function armAudio(){
     const s=AC.createBufferSource(); s.buffer=b;
     s.connect(AC.destination); s.start(0);
   }catch(e){}
-  const go=()=>{ if(on&&seaGain) seaGain.gain.setTargetAtTime(.055,AC.currentTime,.5); };
+  const go=()=>{
+    if(!on) return;
+    if(seaGain) seaGain.gain.setTargetAtTime(.055,AC.currentTime,.5);
+    // the score starts the moment sound is allowed. waiting for the first level
+    // to tick meant the title, the mission card and the notebook were silent —
+    // which is indistinguishable, from the player's chair, from broken music
+    musicStart(); musicSet(1,.55);
+  };
+
   const p=AC.resume();
   if(p&&p.then) p.then(go,go); else go();
 }
