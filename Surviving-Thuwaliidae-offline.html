@@ -772,7 +772,7 @@ function fresh(screen){
        z:0,vz:0,air:false,
        weapon:WEAPONS.none,atkCd:0,swing:0,pickup:0},
     solids:[], covers:[], items:[], infected:[], survivors:[], boats:[],
-    exit:null, sign:null, following:0, toast:'', toastT:0,
+    exit:null, sign:null, following:0, toast:'', toastT:0, cleared:false, clearT:0,
     camH:EYE, roll:0, shake:0, dread:0, lightJitter:1,
     sky:'beach', fogColor:0x697377, fogDensity:.030, ambient:.62, torch:1.0
   };
@@ -874,7 +874,7 @@ function buildMarket(g){
 function buildCorniche(g){
   g.W=1800; g.H=1000;
   g.sky='night'; g.floor=TEX.tile; g.floorRepeat=34;
-  g.fogColor=0x030508; g.fogDensity=.078; g.ambient=.028; g.torch=1.7;
+  g.fogColor=0x0a1014; g.fogDensity=.052; g.ambient=.105; g.torch=2.0;
   box(g,0,60,g.W,16,52,TEX.concrete);
   for(let i=0;i<7;i++) box(g,180+i*230,150,26,26,150,TEX.concrete,.8);
   for(let i=0;i<5;i++) box(g,300+i*300,430,140,34,44,TEX.concrete,.85);
@@ -1315,6 +1315,27 @@ function update(dt){
     for(const s of g.survivors) if(s.state==='trapped'){ s.state='left'; markLost(s.name); }
     finishScreen();
   }
+
+  // clearing the place outright is the other way through: everyone found, nothing
+  // left standing. it costs more and it is louder — but no one gets left behind.
+  if(!g.cleared && g.survivors.length){
+    const nothingLeft = g.infected.length===0;
+    const everyoneWithYou = g.survivors.every(s=>s.state==='follow'||s.state==='out');
+    if(nothingLeft && everyoneWithYou){
+      g.cleared=true; g.clearT=1.9;
+      toast(g,'طهّرتَ المكان · لم تترك أحداً');
+      hush(.004,1.2);
+    }
+  }
+  if(g.cleared){
+    g.clearT-=dt;
+    if(g.clearT<=0){
+      g.cleared=false;
+      for(const s of g.survivors) if(s.state==='follow'){ s.state='out'; markSaved(s.name); }
+      finishScreen();
+      return;
+    }
+  }
   g.toastT=Math.max(0,g.toastT-dt);
   g.shake=Math.max(0,g.shake-dt*.35);
 }
@@ -1384,7 +1405,7 @@ function showVeil(eyebrow,title,body,label,fn){
 /* ============================================================
    WebGL scene — real geometry, real lights, real shadows
    ============================================================ */
-let renderer,scene,camera,torch,hemi,ambientL,signLight,gateLight,viewModel;
+let renderer,scene,camera,torch,hemi,ambientL,signLight,gateLight,viewModel,lantern,lanternMesh,lanternGlass;
 let dyn={infected:[],survivors:[],items:[]};
 let texCache=new Map();
 
@@ -1819,6 +1840,29 @@ function buildScene(g){
   camera.add(torch);
   camera.add(torch.target);
   torch.target.position.set(0,-.05,-1);
+
+  if(lantern){ camera.remove(lantern); lantern=null; }
+  if(lanternMesh){ camera.remove(lanternMesh); lanternMesh=null; }
+  // a storm lantern in the off hand: a soft pool around your own feet, so you are
+  // never standing in absolute black even when the beam points elsewhere
+  lantern=new THREE.PointLight(0xffb866, g.sky==='night'?2.3:1.0, g.sky==='night'?9:5, 2);
+  lantern.position.set(-.30,-.34,-.16);
+  camera.add(lantern);
+
+  const glass=new THREE.Mesh(new THREE.CylinderGeometry(.052,.058,.12,10),
+    new THREE.MeshBasicMaterial({color:0xffd79a}));
+  const cage=new THREE.Mesh(new THREE.CylinderGeometry(.062,.068,.17,10,1,true),
+    new THREE.MeshStandardMaterial({color:0x4a4038,roughness:.8,metalness:.4,side:THREE.DoubleSide}));
+  const bail=new THREE.Mesh(new THREE.TorusGeometry(.05,.006,6,12,Math.PI),
+    new THREE.MeshStandardMaterial({color:0x4a4038,roughness:.8,metalness:.5}));
+  lanternMesh=new THREE.Group();
+  glass.position.y=.0; cage.position.y=.0; bail.position.y=.10; bail.rotation.y=Math.PI/2;
+  lanternMesh.add(glass); lanternMesh.add(cage); lanternMesh.add(bail);
+  lanternMesh.position.set(-.30,-.34,-.20);
+  lanternMesh.scale.setScalar(.9);
+  camera.add(lanternMesh);
+  lanternGlass=glass;
+
   scene.add(camera);
 
   // dynamic bodies
@@ -1872,6 +1916,12 @@ function syncScene(g,dt){
   }
   if(signLight) signLight.intensity = 2.0+Math.sin(t*2.1)*.25;
   if(gateLight) gateLight.intensity = 4.0+Math.sin(t*6.3)*.55+Math.sin(t*17.1)*.28;
+  if(lantern){
+    const flick = 1 + Math.sin(t*7.4)*.07 + Math.sin(t*19.3)*.04;
+    lantern.intensity = (g.sky==="night"?2.3:1.0) * flick * (g.lightJitter||1);
+    if(lanternMesh){ lanternMesh.position.y = -.34 + P.bob*.7; lanternMesh.rotation.z = Math.sin(t*2.1)*.06 + P.bob*1.2; }
+    if(lanternGlass) lanternGlass.material.color.setHSL(.09,.62,Math.min(.72,.52*flick));
+  }
 
   // infected
   for(const e of dyn.infected){
