@@ -2730,15 +2730,26 @@ function beep(f,dur,vol){ if(on&&AC) vtone({type:'square',f0:f,f1:f*.8,dur,vol,c
    a detuned tritone drone underneath everything; the beat only arrives
    once something is actually hunting you.
    ============================================================ */
-const BPM=132, STEP=60/BPM/4, ROOT=55;          // A1
+const ROOT=55;                                   // A1
 const TRITONE=Math.pow(2,6/12);
-// phrygian / diminished shapes — semitone and tritone, the two intervals
-// the ear refuses to settle into
-const ARP =[0,1,6,7,12,7,6,1];
-const BASS=[0,0,1,0, 0,0,-1,0, 0,0,6,0, 1,1,-1,0];
+// the heart at rest, and the heart that knows. this pulse IS the grid: every
+// other element is placed against it, so the whole score accelerates with the
+// threat instead of playing a busier pattern at the same tempo
+const BPM_CALM=44, BPM_HUNT=112;
+// semitone, tritone, minor ninth — the intervals an ear refuses to resolve
+const COLD=[0,1,6,13,18];
 
 let mus={playing:false,step:0,next:0,timer:null,gain:null,level:0,
-         droneA:null,droneB:null,droneGain:null,droneFilt:null,lastBraam:0};
+         droneA:null,droneB:null,droneC:null,droneGain:null,droneFilt:null,
+         lastBraam:0,lastWhine:0,lastBreath:0,lastRise:0};
+
+// the curve matters: the resting level in play is about .72, so a straight
+// mapping would start the heart already racing. this keeps room above it
+function bpmNow(){
+  const L=Math.min(1,Math.max(0,mus.level));
+  return BPM_CALM + (BPM_HUNT-BPM_CALM)*Math.pow(L,1.6);
+}
+function stepNow(){ return 60/bpmNow()/4; }
 
 function musicInit(){
   if(mus.gain) return;
@@ -2747,34 +2758,128 @@ function musicInit(){
   comp.threshold.value=-20; comp.ratio.value=7;
   mus.gain.connect(comp).connect(master);
 
-  // the drone: two saws a tritone apart, detuned so they beat against each other
   mus.droneFilt=AC.createBiquadFilter();
-  mus.droneFilt.type='lowpass'; mus.droneFilt.frequency.value=180; mus.droneFilt.Q.value=6;
+  mus.droneFilt.type='lowpass'; mus.droneFilt.frequency.value=170; mus.droneFilt.Q.value=7;
   mus.droneGain=AC.createGain(); mus.droneGain.gain.value=0;
   mus.droneFilt.connect(mus.droneGain).connect(mus.gain);
 
-  mus.droneA=AC.createOscillator(); mus.droneA.type='sawtooth';
-  mus.droneA.frequency.value=ROOT/2;
-  mus.droneB=AC.createOscillator(); mus.droneB.type='sawtooth';
-  mus.droneB.frequency.value=(ROOT/2)*TRITONE;
-  mus.droneB.detune.value=14;                    // the sour beat
-  mus.droneA.connect(mus.droneFilt); mus.droneB.connect(mus.droneFilt);
-  // a slow sweep so the drone never sits still
-  const lfo=AC.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.055;
-  const lg=AC.createGain(); lg.gain.value=95;
-  lfo.connect(lg).connect(mus.droneFilt.frequency);
-  mus.droneA.start(); mus.droneB.start(); lfo.start();
+  // three saws: a root, a tritone above it, and a minor ninth that beats
+  // against both. nothing here is in tune with anything else, deliberately
+  const mk=(freq,det)=>{
+    const o=AC.createOscillator(); o.type='sawtooth';
+    o.frequency.value=freq; o.detune.value=det;
+    o.connect(mus.droneFilt); o.start(); return o;
+  };
+  mus.droneA=mk(ROOT/2,0);
+  mus.droneB=mk((ROOT/2)*TRITONE,14);
+  mus.droneC=mk((ROOT/2)*Math.pow(2,13/12),-23);
+  // and it sags — a drift so slow you never catch it moving, only notice that
+  // the ground is no longer level
+  const sag=AC.createOscillator(); sag.type='sine'; sag.frequency.value=0.021;
+  const sg=AC.createGain(); sg.gain.value=26;
+  sag.connect(sg); sg.connect(mus.droneA.detune); sg.connect(mus.droneC.detune); sag.start();
+  const lfo=AC.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.047;
+  const lg=AC.createGain(); lg.gain.value=90;
+  lfo.connect(lg).connect(mus.droneFilt.frequency); lfo.start();
 }
 function note(s){ return ROOT*Math.pow(2,s/12); }
 
-function mKick(t0,hard){
-  const o=AC.createOscillator(),g=AC.createGain();
-  o.type='sine'; o.frequency.setValueAtTime(hard?165:120,t0);
-  o.frequency.exponentialRampToValueAtTime(hard?36:30,t0+(hard?.10:.16));
-  g.gain.setValueAtTime(hard?1:.72,t0);
-  g.gain.exponentialRampToValueAtTime(.0001,t0+(hard?.30:.42));
-  o.connect(g).connect(mus.gain); o.start(t0); o.stop(t0+.44);
+/* the pulse: lub, then dub — the second softer and a fraction behind.
+   the only regular thing in the score, and it is getting faster */
+function mHeart(t0,L){
+  const beat=(t,amp,f0)=>{
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type='sine';
+    o.frequency.setValueAtTime(f0,t);
+    o.frequency.exponentialRampToValueAtTime(f0*.42,t+.19);
+    g.gain.setValueAtTime(.0001,t);
+    g.gain.exponentialRampToValueAtTime(amp,t+.012);
+    g.gain.exponentialRampToValueAtTime(.0001,t+.34);
+    o.connect(g).connect(mus.gain); o.start(t); o.stop(t+.36);
+    // the knock inside it, felt more than heard
+    const s=AC.createBufferSource(); s.buffer=NOISE; s.loop=true;
+    const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=155;
+    const ng=AC.createGain();
+    ng.gain.setValueAtTime(amp*.5,t);
+    ng.gain.exponentialRampToValueAtTime(.0001,t+.10);
+    s.connect(f).connect(ng).connect(mus.gain); s.start(t); s.stop(t+.12);
+  };
+  const a=.42+L*.46;
+  beat(t0, a, 74+L*22);
+  beat(t0+.175-L*.045, a*.52, 62+L*18);
 }
+
+/* something struck in another room. never twice at the same pitch, and the
+   decay runs long enough to become uncomfortable */
+function mBell(t0){
+  const semi=COLD[(Math.random()*COLD.length)|0]+24+(Math.random()<.4?12:0);
+  const f0=note(semi);
+  for(const d of [-9,7]){
+    const o=AC.createOscillator(),g=AC.createGain(),fl=AC.createBiquadFilter();
+    o.type='triangle'; o.frequency.value=f0; o.detune.value=d;
+    fl.type='bandpass'; fl.frequency.value=f0*1.6; fl.Q.value=3.2;
+    g.gain.setValueAtTime(.0001,t0);
+    g.gain.exponentialRampToValueAtTime(.05,t0+.004);
+    g.gain.exponentialRampToValueAtTime(.0001,t0+2.6);
+    o.connect(fl).connect(g).connect(mus.gain); o.start(t0); o.stop(t0+2.7);
+  }
+}
+
+/* the band a scream lives in, held thin and wavering just under notice.
+   the ear reads it as distress whether the player registers it or not */
+function mWhine(t0){
+  const base=2100+Math.random()*1500;
+  const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
+  o.type='sine';
+  o.frequency.setValueAtTime(base,t0);
+  o.frequency.linearRampToValueAtTime(base*(.92+Math.random()*.2),t0+3.4);
+  const w=AC.createOscillator(); w.type='sine'; w.frequency.value=4.5+Math.random()*3;
+  const wg=AC.createGain(); wg.gain.value=9+Math.random()*10;
+  w.connect(wg).connect(o.frequency); w.start(t0); w.stop(t0+3.6);
+  f.type='bandpass'; f.frequency.value=base; f.Q.value=7;
+  g.gain.setValueAtTime(.0001,t0);
+  g.gain.exponentialRampToValueAtTime(.022,t0+1.1);
+  g.gain.exponentialRampToValueAtTime(.0001,t0+3.5);
+  o.connect(f).connect(g).connect(mus.gain); o.start(t0); o.stop(t0+3.6);
+}
+
+/* someone drawing breath close enough to hear, when nothing should be close
+   enough to hear. it plays only while the player believes they are safe */
+function mBreath(t0){
+  const s=AC.createBufferSource(); s.buffer=NOISE; s.loop=true;
+  s.playbackRate.value=.5+Math.random()*.3;
+  const f=AC.createBiquadFilter(); f.type='bandpass'; f.Q.value=1.6;
+  f.frequency.setValueAtTime(420,t0);
+  f.frequency.linearRampToValueAtTime(880,t0+.9);
+  f.frequency.linearRampToValueAtTime(330,t0+2.1);
+  const g=AC.createGain();
+  g.gain.setValueAtTime(.0001,t0);
+  g.gain.exponentialRampToValueAtTime(.05,t0+.75);
+  g.gain.exponentialRampToValueAtTime(.0001,t0+2.2);
+  let dest=mus.gain;
+  if(AC.createStereoPanner){
+    const p=AC.createStereoPanner(); p.pan.value=(Math.random()-.5)*1.4;
+    p.connect(mus.gain); dest=p;                 // beside you, never in front
+  }
+  s.connect(f).connect(g).connect(dest); s.start(t0); s.stop(t0+2.3);
+}
+
+/* a rise that never arrives anywhere: it climbs for four seconds and is cut
+   off unresolved. only while something is already coming */
+function mRise(t0){
+  const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
+  o.type='sawtooth';
+  o.frequency.setValueAtTime(70,t0);
+  o.frequency.exponentialRampToValueAtTime(900,t0+3.8);
+  f.type='bandpass'; f.Q.value=4;
+  f.frequency.setValueAtTime(200,t0);
+  f.frequency.exponentialRampToValueAtTime(2400,t0+3.8);
+  g.gain.setValueAtTime(.0001,t0);
+  g.gain.exponentialRampToValueAtTime(.085,t0+2.6);
+  g.gain.exponentialRampToValueAtTime(.0001,t0+4.0);
+  o.connect(f).connect(g).connect(mus.gain); o.start(t0); o.stop(t0+4.05);
+}
+
 /* a low detuned stab — the sound a big thing makes when it notices you */
 function mBraam(t0){
   for(const d of [0,17,-13]){
@@ -2801,46 +2906,6 @@ function mScrape(t0){
   g.gain.exponentialRampToValueAtTime(.0001,t0+.6);
   s.connect(f).connect(g).connect(mus.gain); s.start(t0); s.stop(t0+.65);
 }
-function mHat(t0,open){
-  const s=AC.createBufferSource(); s.buffer=NOISE; s.loop=true;
-  const f=AC.createBiquadFilter(); f.type='highpass'; f.frequency.value=8200;
-  const g=AC.createGain(), d=open?.13:.035;
-  g.gain.setValueAtTime(open?.12:.075,t0);
-  g.gain.exponentialRampToValueAtTime(.0001,t0+d);
-  s.connect(f).connect(g).connect(mus.gain); s.start(t0); s.stop(t0+d+.02);
-}
-function mClap(t0){
-  const s=AC.createBufferSource(); s.buffer=NOISE; s.loop=true;
-  const f=AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1500; f.Q.value=1.3;
-  const g=AC.createGain();
-  g.gain.setValueAtTime(.0001,t0);
-  g.gain.exponentialRampToValueAtTime(.40,t0+.005);
-  g.gain.exponentialRampToValueAtTime(.0001,t0+.20);
-  s.connect(f).connect(g).connect(mus.gain); s.start(t0); s.stop(t0+.22);
-}
-function mBass(t0,semi){
-  const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
-  o.type='sawtooth'; o.frequency.value=note(semi); o.detune.value=-8;
-  f.type='lowpass'; f.Q.value=9;
-  f.frequency.setValueAtTime(1500,t0);
-  f.frequency.exponentialRampToValueAtTime(190,t0+STEP*1.6);
-  g.gain.setValueAtTime(.0001,t0);
-  g.gain.exponentialRampToValueAtTime(.32,t0+.010);
-  g.gain.exponentialRampToValueAtTime(.0001,t0+STEP*1.9);
-  o.connect(f).connect(g).connect(mus.gain); o.start(t0); o.stop(t0+STEP*2);
-}
-/* the arp is two detuned saws, not a clean square — it should grate */
-function mArp(t0,semi){
-  for(const d of [-11,11]){
-    const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();
-    o.type='sawtooth'; o.frequency.value=note(semi+24); o.detune.value=d;
-    f.type='bandpass'; f.frequency.value=note(semi+24)*2.4; f.Q.value=5;
-    g.gain.setValueAtTime(.0001,t0);
-    g.gain.exponentialRampToValueAtTime(.075,t0+.006);
-    g.gain.exponentialRampToValueAtTime(.0001,t0+STEP*1.5);
-    o.connect(f).connect(g).connect(mus.gain); o.start(t0); o.stop(t0+STEP*1.6);
-  }
-}
 
 function musicTick(){
   if(!on||!AC||!mus.playing) return;
@@ -2850,22 +2915,21 @@ function musicTick(){
   while(mus.next<ahead){
     const t0=mus.next, s=mus.step, L=mus.level;
 
-    // under ~.35 there is no beat at all: only the drone, a slow heart of a kick,
-    // and metal somewhere in the dark
-    if(L<=.36){
-      if(s%16===0) mKick(t0,false);
-      if(s%32===20 && Math.random()<.5) mScrape(t0);
-    } else {
-      if(s%4===0) mKick(t0, L>.75);
-      if(L>.45){ mHat(t0, s%4===2); if(s%8===4) mClap(t0); }
-      if(L>.55 && s%2===0) mBass(t0,BASS[s%16]);
-      if(L>.78) mArp(t0,ARP[s%8]);
-      if(L>.88 && s%16===15){ mClap(t0); mClap(t0+STEP*.5); }
-    }
-    // the stab lands on its own clock, so it never becomes predictable
-    if(L>.5 && t0-mus.lastBraam > 5.5+Math.random()*7){ mus.lastBraam=t0; mBraam(t0); }
+    // the heart is the entire rhythm section
+    if(s%4===0) mHeart(t0,L);
 
-    mus.next+=STEP; mus.step=(s+1)%64;
+    // everything else sits on a seven against that four, so the two cycles
+    // meet only once every twenty-eight steps and nothing ever settles
+    if(s%7===3 && Math.random()<(.20+L*.30)) mBell(t0);
+    if(s%7===5 && Math.random()<(.09+L*.20)) mScrape(t0);
+
+    // and these keep clocks of their own, so none of them can be anticipated
+    if(t0-mus.lastWhine  > 7+Math.random()*11){ mus.lastWhine=t0;  mWhine(t0); }
+    if(L<.85 && t0-mus.lastBreath > 9+Math.random()*13){ mus.lastBreath=t0; mBreath(t0); }
+    if(L>.5  && t0-mus.lastBraam  > 5.5+Math.random()*7){ mus.lastBraam=t0;  mBraam(t0); }
+    if(L>.8  && t0-mus.lastRise   > 9+Math.random()*8){  mus.lastRise=t0;   mRise(t0); }
+
+    mus.next+=stepNow(); mus.step=(s+1)%28;
   }
 }
 function musicStart(){
@@ -2890,7 +2954,7 @@ function musicSet(dt,want){
     mus.gain.gain.setTargetAtTime(Math.min(.92,mus.level*.92),AC.currentTime,.18);
     // the drone is loudest while you are merely being stalked, and pulls back a
     // little once the beat takes over — dread and panic should not fight
-    const dr = mus.level<.4 ? .30 : .30 - (mus.level-.4)*.18;
+    const dr = mus.level<.4 ? .38 : .38 - (mus.level-.4)*.10;
     mus.droneGain.gain.setTargetAtTime(Math.max(.10,dr),AC.currentTime,.5);
     mus.droneFilt.Q.value = 6 + mus.level*5;
     mus.droneB.detune.setTargetAtTime(10 + mus.level*26, AC.currentTime, .8);
