@@ -717,6 +717,52 @@ function buildTextures(){
     grit(x,w,h,151,700,.02,.14,true);
   });
 
+  // ---- water ----------------------------------------------------------
+  // ripple bands, drawn three times side by side so the tile has no seam.
+  // this canvas is both the colour and the bump map: without it the sea is a
+  // flat painted plane, and a flat plane never looks like water
+  TEX.water=makeTex(256,256,(x,w,h)=>{
+    x.fillStyle='#2f6f88'; x.fillRect(0,0,w,h);
+    const r=rng(41);
+    for(let i=0;i<220;i++){
+      const y=r()*h, len=16+r()*95, a=.04+r()*.15, x0=r()*w;
+      const up=r()<.5;
+      x.strokeStyle=up?`rgba(196,231,240,${a})`:`rgba(6,38,56,${a})`;
+      x.lineWidth=.5+r()*2.1;
+      const d1=-3+r()*6, d2=-3+r()*6;
+      for(const off of [-w,0,w]){
+        x.beginPath(); x.moveTo(x0+off,y);
+        x.bezierCurveTo(x0+off+len*.33,y+d1,x0+off+len*.66,y+d2,x0+off+len,y);
+        x.stroke();
+      }
+    }
+    grit(x,w,h,7,1100,.02,.06,false);
+    grit(x,w,h,8,900,.02,.06,true);
+  });
+  // how far the shallows reach up the sand before they stop being water.
+  // read as a greyscale alpha ramp, so the water dissolves into the beach
+  // instead of ending on a drawn line
+  TEX.shore=makeTex(8,256,(x,w,h)=>{
+    const g=x.createLinearGradient(0,0,0,h);
+    g.addColorStop(0.00,'#ffffff');
+    g.addColorStop(0.55,'#e8e8e8');
+    g.addColorStop(0.82,'#6e6e6e');
+    g.addColorStop(0.95,'#1c1c1c');
+    g.addColorStop(1.00,'#000000');
+    x.fillStyle=g; x.fillRect(0,0,w,h);
+  });
+  // the line of broken water, as blobs rather than a band
+  TEX.foam=makeTex(256,64,(x,w,h)=>{
+    x.fillStyle='#000'; x.fillRect(0,0,w,h);
+    const r=rng(19);
+    for(let i=0;i<300;i++){
+      const cx=r()*w, cy=h*(.24+r()*.54), rad=2+r()*14, a=.22+r()*.62;
+      const g=x.createRadialGradient(cx,cy,0,cx,cy,rad);
+      g.addColorStop(0,`rgba(255,255,255,${a})`);
+      g.addColorStop(1,'rgba(255,255,255,0)');
+      x.fillStyle=g; x.beginPath(); x.arc(cx,cy,rad,0,6.29); x.fill();
+    }
+  });
   TEX.sand=makeTex(512,512,(x,w,h)=>{
     x.fillStyle='#6d6154'; x.fillRect(0,0,w,h);
     const r=rng(71);
@@ -1529,7 +1575,7 @@ function showVeil(eyebrow,title,body,label,fn){
 /* ============================================================
    WebGL scene — real geometry, real lights, real shadows
    ============================================================ */
-let renderer,scene,camera,torch,hemi,ambientL,signLight,gateLight,viewModel,lantern,lanternMesh,lanternGlass,seaFoam;
+let renderer,scene,camera,torch,hemi,ambientL,signLight,gateLight,viewModel,lantern,lanternMesh,lanternGlass,seaFoam,seaTex;
 let dyn={infected:[],survivors:[],items:[]};
 let texCache=new Map();
 
@@ -1810,40 +1856,59 @@ function buildScene(g){
     scene.background=null;
   }
 
-  // the sea: Red Sea blue-green, wet and reflective, with the sunset only
-  // catching its surface rather than staining the whole body of water
+  // the sea: Red Sea blue, in three layers — open water, shallows that dissolve
+  // into the sand, and the broken line where it lands. the sunset only catches
+  // the surface; it does not dye the water
   if(g.sky==='beach'||g.sky==='night'){
-    const seaMat = g.sunset
-      ? new THREE.MeshStandardMaterial({color:0x14647f,roughness:.09,metalness:.80,
-          emissive:0x09415a,emissiveIntensity:.55})
-      : new THREE.MeshStandardMaterial({color:g.sky==='night'?0x071a24:0x1d5468,
-          roughness:.14,metalness:.7,emissive:0x03141c,emissiveIntensity:.3});
-    const sea=new THREE.Mesh(new THREE.PlaneGeometry(WX(g.W)*4,200,1,1),seaMat);
+    const night=(g.sky==='night');
+    const wtex=(canvas,ru,rv,clampV)=>{
+      const t=new THREE.CanvasTexture(canvas);
+      t.wrapS=THREE.RepeatWrapping;
+      t.wrapT=clampV?THREE.ClampToEdgeWrapping:THREE.RepeatWrapping;
+      t.repeat.set(ru,rv); t.anisotropy=4;
+      return t;
+    };
+    const W4=WX(g.W)*4;
+
+    // open water
+    const deepTex=wtex(TEX.water,W4/6,200/6);
+    const seaMat=new THREE.MeshStandardMaterial({
+      map:deepTex, bumpMap:deepTex, bumpScale:.05,
+      color: night?0x4e7f95 : 0x9ed6ec,
+      roughness:.13, metalness:.72,
+      emissive: night?0x02121a:0x0a3a52, emissiveIntensity: night?.35:.5});
+    const sea=new THREE.Mesh(new THREE.PlaneGeometry(W4,200,1,1),seaMat);
     sea.rotation.x=-Math.PI/2;
     sea.position.set(WX(g.W)/2,-0.12,-100+WZ(0));
     scene.add(sea);
 
-    // a band of shallows where it meets the sand: paler, greener, breaking
+    // the shallows: paler and greener over sand, fading out where it runs dry
+    const shTex=wtex(TEX.water,W4/4,WX(150)/4);
     const shallowMat=new THREE.MeshStandardMaterial({
-      color: g.sky==='night'?0x0d2c38:0x2e8ea0, roughness:.22, metalness:.55,
-      transparent:true, opacity:.88,
-      emissive:g.sky==='night'?0x04161d:0x0d3b45, emissiveIntensity:.35});
-    const shallow=new THREE.Mesh(new THREE.PlaneGeometry(WX(g.W)*4,WX(150)),shallowMat);
+      map:shTex, bumpMap:shTex, bumpScale:.03,
+      alphaMap:wtex(TEX.shore,1,1,true), transparent:true, depthWrite:false,
+      color: night?0x5c8c96 : 0xcaf0ea,
+      roughness:.2, metalness:.5,
+      emissive: night?0x05181f:0x1c6b6a, emissiveIntensity: night?.3:.55});
+    const shallow=new THREE.Mesh(new THREE.PlaneGeometry(W4,WX(150)),shallowMat);
     shallow.rotation.x=-Math.PI/2;
-    shallow.position.set(WX(g.W)/2,-0.06,WZ(0)-WX(62));
+    shallow.position.set(WX(g.W)/2,-0.055,WZ(0)-WX(64));
     scene.add(shallow);
 
     // foam along the waterline
-    const foamMat=new THREE.MeshStandardMaterial({color:0xdfeef1,roughness:.85,
-      transparent:true,opacity:g.sky==='night'?.30:.62});
-    const foam=new THREE.Mesh(new THREE.PlaneGeometry(WX(g.W)*4,WX(26)),foamMat);
+    const foamTex=wtex(TEX.foam,W4/2.2,1,true);
+    const foamMat=new THREE.MeshStandardMaterial({color:0xe6f3f5,roughness:.9,
+      map:foamTex, alphaMap:foamTex, transparent:true, depthWrite:false,
+      opacity:night?.34:.8});
+    const foam=new THREE.Mesh(new THREE.PlaneGeometry(W4,WX(30)),foamMat);
     foam.rotation.x=-Math.PI/2;
-    foam.position.set(WX(g.W)/2,-0.018,WZ(0)+WX(6));
+    foam.position.set(WX(g.W)/2,-0.03,WZ(0)-WX(4));
     foam.userData.z0=foam.position.z;
     foam.userData.op0=foamMat.opacity;
     scene.add(foam);
     seaFoam=foam;
-  } else seaFoam=null;
+    seaTex=[deepTex,shTex];
+  } else { seaFoam=null; seaTex=null; }
 
   // the wrecks: a broken hull heeled over on the reef, with a snapped mast
   for(const w of (g.wrecks||[])){
@@ -2208,6 +2273,10 @@ function syncScene(g,dt){
   // periods so it never reads as a loop
   if(seaFoam){
     const t=performance.now()*.001;
+    if(seaTex){                       // the swell moving across the surface
+      seaTex[0].offset.y = t*.019; seaTex[0].offset.x = Math.sin(t*.07)*.03;
+      seaTex[1].offset.y = t*.034; seaTex[1].offset.x = Math.sin(t*.11)*.05;
+    }
     seaFoam.position.z = seaFoam.userData.z0 +
       (Math.sin(t*.55)*.9 + Math.sin(t*.23+1.7)*.45)*WX(9);
     seaFoam.material.opacity = seaFoam.userData.op0 *
