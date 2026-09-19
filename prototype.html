@@ -1019,7 +1019,12 @@ function mkInfected(x,y,st,scale){
   const k=scale||1;
   const b={x,y,r:11,hp:2,aggro:0,seen:false,watched:false,speed:80*k,sense:240*k,
            hitCd:0,stagger:0,atk:0,strain:st,ring:0,home:{x,y},wander:Math.random()*6.28,
-           moan:0,lunge:0,gait:Math.random()*6.28,lean:(Math.random()-.5)*.25};
+           moan:0,lunge:0,gait:Math.random()*6.28,lean:(Math.random()-.5)*.25,
+           z:0,vz:0,air:false,jumpCd:Math.random()*2,
+           lkx:x,lky:y,search:0,blocked:0,detour:0,detourT:0,
+           // no two of them take the same line in, so a group arrives spread
+           // out instead of in single file behind each other
+           flank:(Math.random()*2-1)*0.85};
   if(st==='engage'){ b.hp=4; b.speed=74*k; }
   if(st==="stealth"){ b.sense=360*k; b.speed=84*k; }
   if(st==='flee'){ b.speed=124*k; }
@@ -1417,6 +1422,11 @@ function update(dt){
   P.pickup=Math.max(0,P.pickup-dt);
   P.boost=Math.max(0,P.boost-dt);
 
+  // how fast you are really travelling. the infected aim at where you will be
+  P.vx=(P.x-(P.lx===undefined?P.x:P.lx))/Math.max(dt,.001);
+  P.vy=(P.y-(P.ly===undefined?P.y:P.ly))/Math.max(dt,.001);
+  P.lx=P.x; P.ly=P.y;
+
   let following=0;
   for(const s of g.survivors){
     if(s.state==='down'||s.state==='out'||s.state==='left') continue;
@@ -1491,7 +1501,17 @@ function update(dt){
     const wasSeen=z.seen;
     if(canSense) z.aggro=3.6; else z.aggro=Math.max(0,z.aggro-dt);
     z.seen=z.aggro>0;
-    if(z.seen&&!wasSeen){ zShriek(d,panOf(g,z)); hush(.01,.55); }
+    if(z.seen&&!wasSeen){
+      zShriek(d,panOf(g,z)); hush(.01,.55);
+      // and everything within earshot now knows roughly where you are. this is
+      // the single change that makes them feel like a pack rather than a list
+      for(const o of g.infected){
+        if(o===z||o.seen) continue;
+        if(Math.hypot(o.x-z.x,o.y-z.y)<260){
+          o.lkx=P.x; o.lky=P.y; o.search=Math.max(o.search||0,5.5);
+        }
+      }
+    }
 
     z.lunge=Math.max(0,z.lunge-dt);
     let mul=1;
@@ -1501,18 +1521,65 @@ function update(dt){
     if(z.lunge>0.9) mul*=1.7;
 
     z.gait+=dt*(z.seen&&!z.watched?7.5:2.2);
+
+    // it remembers. losing sight of you is not the same as forgetting you
+    if(z.seen){ z.lkx=P.x; z.lky=P.y; z.search=6.5; }
+    else if(z.search>0) z.search-=dt;
+
+    z.jumpCd=Math.max(0,z.jumpCd-dt);
+    if(z.air){                                   // in the air, and falling
+      z.vz-=560*dt; z.z+=z.vz*dt;
+      if(z.z<=0){ z.z=0; z.vz=0; z.air=false; thump(.05); }
+    }
+
     if(z.stagger<=0){
+      let tx,ty,sp;
       if(z.seen||z.watched){
-        const a=Math.atan2(P.y-z.y,P.x-z.x);
-        slide(g,z,Math.cos(a)*z.speed*mul*dt,Math.sin(a)*z.speed*mul*dt);
-        z.face=a;
+        // walking to where you are is how a thing never catches anything
+        const lead = z.watched?0:Math.min(1,d/260)*.55;
+        tx=P.x+(P.vx||0)*lead; ty=P.y+(P.vy||0)*lead;
+        sp=z.speed*mul;
+      } else if(z.search>0){
+        tx=z.lkx; ty=z.lky; sp=z.speed*.55;      // to where it last had you
+        if(Math.hypot(tx-z.x,ty-z.y)<26){        // then casting about there
+          z.wander+=(Math.random()-.5)*dt*6;
+          tx=z.x+Math.cos(z.wander)*60; ty=z.y+Math.sin(z.wander)*60;
+        }
       } else {
         z.wander+=(Math.random()-.5)*dt*3;
         const hx=z.home.x-z.x, hy=z.home.y-z.y;
         const pull=Math.hypot(hx,hy)>150?Math.atan2(hy,hx):z.wander;
-        slide(g,z,Math.cos(pull)*24*dt,Math.sin(pull)*24*dt);
-        z.face=pull;
+        tx=z.x+Math.cos(pull)*60; ty=z.y+Math.sin(pull)*60; sp=24;
       }
+      let a=Math.atan2(ty-z.y,tx-z.x);
+      if((z.seen||z.watched) && d>60) a += z.flank*Math.min(1,(d-60)/220);
+
+      // is it actually getting anywhere, or leaning on a wall?
+      const moved=Math.hypot(z.x-(z.px===undefined?z.x:z.px), z.y-(z.py===undefined?z.y:z.py));
+      z.px=z.x; z.py=z.y;
+      if(sp>30 && moved < sp*dt*.35) z.blocked+=dt;
+      else z.blocked=Math.max(0,z.blocked-dt*2);
+
+      if(z.blocked>.25){
+        // commit to one way around. dithering at a corner is what makes a
+        // thing look stupid, so once it picks a side it holds it
+        if(z.detourT<=0){ z.detour=Math.random()<.5?1:-1; z.detourT=1.2+Math.random(); }
+        z.detourT-=dt;
+        a += z.detour*1.25;
+        // unless whatever is in the way is low enough to go over
+        const ax=z.x+Math.cos(a)*(z.r+9), ay=z.y+Math.sin(a)*(z.r+9);
+        const low=g.solids.some(o=>o.h>4&&o.h<58&&hitsRect(ax,ay,z.r,o));
+        if(low&&!z.air&&z.jumpCd<=0){ z.vz=196; z.air=true; z.jumpCd=1.4; z.blocked=0; gruntEffort(); }
+      } else z.detourT=0;
+
+      // and a hunting one will throw itself the last of the distance
+      if(z.seen&&!z.watched&&!z.air&&z.jumpCd<=0&&d<120&&d>52&&Math.random()<dt*1.6){
+        z.vz=178; z.air=true; z.jumpCd=2.6+Math.random()*2; sp*=1.9;
+        zShriek(d,panOf(g,z));
+      }
+
+      slide(g,z,Math.cos(a)*sp*dt,Math.sin(a)*sp*dt);
+      z.face=Math.atan2(ty-z.y,tx-z.x);
     }
 
     const wep=P.weapon;
@@ -2190,30 +2257,6 @@ function makeCar(seed){
   return g2;
 }
 
-/* a banner on a pole: the green of the place, without the flag itself —
-   the national flag carries the shahada, and it does not belong on a torn
-   cloth in a game about the dead */
-function makeBanner(seed){
-  const r=rng(seed);
-  const g2=new THREE.Group();
-  const poleMat=new THREE.MeshStandardMaterial({color:0x8d9095,roughness:.52,metalness:.62,
-    envMapIntensity:.35});
-  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.045,.055,5.2,8),poleMat);
-  pole.position.y=2.6; pole.castShadow=true; g2.add(pole);
-  const clothMat=new THREE.MeshStandardMaterial({color:0x1d6b3f,roughness:.94,metalness:0,
-    envMapIntensity:.12,side:THREE.DoubleSide});
-  const cloth=new THREE.Mesh(new THREE.PlaneGeometry(1.5,.95,6,3),clothMat);
-  cloth.position.set(.76,4.42,0); cloth.castShadow=true;
-  const pos=cloth.geometry.attributes.position;
-  for(let i=0;i<pos.count;i++){               // hanging slack, never flat
-    const x=pos.getX(i), y=pos.getY(i);
-    pos.setZ(i, Math.sin((x+.75)*2.1)*.09*((x+.75)/1.5) + Math.cos(y*3)*.03);
-  }
-  pos.needsUpdate=true; cloth.geometry.computeVertexNormals();
-  g2.add(cloth);
-  g2.rotation.y=r()*6.28;
-  return g2;
-}
 
 /* the corniche lamps. the cone is the point: in fog, a light you can see the
    shape of is worth more than a light that only brightens the ground */
@@ -2242,7 +2285,84 @@ function makeLamp(lit){
   return g2;
 }
 
+/* Bodies that stayed bodies. They are set dressing, not enemies — no logic,
+   no collision, nothing to update. Their whole job is to be counted by the
+   player and to make the ones that ARE standing mean something. */
+let corpseMats=null;
+function makeCorpse(seed){
+  const r=rng(seed);
+  if(!corpseMats){
+    corpseMats={
+      flesh:new THREE.MeshStandardMaterial({map:tex(TEX.flesh,1),
+        normalMap:nrm(TEX.flesh,1,1.4), normalScale:new THREE.Vector2(1,1),
+        color:0x8d9280,roughness:.88,metalness:.02,envMapIntensity:.18}),
+      cloth:new THREE.MeshStandardMaterial({map:tex(TEX.thobe,1),
+        normalMap:nrm(TEX.thobe,1,1.0), normalScale:new THREE.Vector2(.8,.8),
+        alphaMap:tex(TEX.thobeTorn,1), alphaTest:.5,
+        color:0xe8e3d8,roughness:.99,metalness:0,envMapIntensity:.08,
+        side:THREE.DoubleSide}),
+      dark:new THREE.MeshStandardMaterial({map:tex(TEX.thobe,1),
+        color:0x2e2a27,roughness:.99,envMapIntensity:.06,side:THREE.DoubleSide})
+    };
+  }
+  const g2=new THREE.Group();
+  const cloth = r()<.22 ? corpseMats.dark : corpseMats.cloth;
+  const add=(geo,mat,x,y,z,rx,ry,rz)=>{
+    const m=new THREE.Mesh(geo,mat);
+    m.position.set(x,y,z);
+    m.rotation.set(rx||0,ry||0,rz||0);
+    m.castShadow=true; m.receiveShadow=true;
+    g2.add(m); return m;
+  };
+  // lying on its side or its face — never neatly on its back
+  const roll=(r()-.5)*1.4;
+  const torso=add(new THREE.CylinderGeometry(.165,.20,.62,9),cloth,0,.17,0,Math.PI/2,0,0);
+  torso.rotation.z=roll*.3; torso.scale.set(1,1,.8);
+  // the robe spread around it, the way cloth falls when nobody is holding it up
+  const robe=add(new THREE.CylinderGeometry(.21,.40,.90,12,1,true),cloth,-.52,.13,0,Math.PI/2,0,0);
+  robe.scale.set(1,1,.74);
+  const head=add(new THREE.SphereGeometry(.113,12,10),corpseMats.flesh,.44,.13,0);
+  head.scale.set(.88,1.18,.95);
+  head.rotation.z=(r()-.5)*1.6;                 // turned too far to be asleep
+  // arms thrown out, not folded
+  add(new THREE.CylinderGeometry(.042,.030,.72,7),corpseMats.flesh,
+      .12,.09,.30,0,0,Math.PI/2+(r()-.5)*1.1);
+  add(new THREE.CylinderGeometry(.042,.030,.72,7),corpseMats.flesh,
+      .06,.09,-.26,0,0,Math.PI/2+(r()-.5)*1.3);
+  // legs, one bent under
+  add(new THREE.CylinderGeometry(.062,.040,.92,7),cloth,-.86,.10,.10,0,0,Math.PI/2+(r()-.5)*.5);
+  add(new THREE.CylinderGeometry(.062,.040,.92,7),cloth,-.80,.10,-.12,0,.5,Math.PI/2+(r()-.5)*.8);
+  // a pool, soaked into whatever it fell on
+  const pool=new THREE.Mesh(new THREE.CircleGeometry(.42+r()*.42,14),
+    new THREE.MeshStandardMaterial({color:0x3a0b08,roughness:.55,metalness:.06,
+      transparent:true,opacity:.82,envMapIntensity:.22}));
+  pool.rotation.x=-Math.PI/2; pool.position.set(-.1,.011,0);
+  pool.scale.set(1,1,.7+r()*.5);
+  g2.add(pool);
+  g2.rotation.y=r()*6.28;
+  g2.position.y=-.02-r()*.05;                   // settled into the ground
+  return g2;
+}
+
+function buildDead(g){
+  const r=rng(g.screen*907+13);
+  const n = g.sky==='market' ? 9 : 7;
+  const P=g.P;
+  for(let i=0;i<n;i++){
+    let x,y,tries=0;
+    do{
+      x=g.W*(0.08+r()*0.84); y=g.H*(0.08+r()*0.84);
+      tries++;
+    } while(tries<12 && (Math.hypot(x-P.x,y-P.y)<180 ||
+             g.solids.some(o=>o.h>20&&hitsRect(x,y,26,o))));
+    const c=makeCorpse(g.screen*71+i*17);
+    c.position.x=WX(x); c.position.z=WZ(y);
+    scene.add(c);
+  }
+}
+
 function buildStreet(g){
+
   const r=rng(g.screen*331+7);
   // cars: on the corniche they are abandoned in the road; on the beach road
   // there are only a couple, run off the edge
@@ -2263,15 +2383,6 @@ function buildStreet(g){
       L.position.set(WX(g.W)*(0.08+i*0.14), 0, WZ(g.H)*0.16);
       scene.add(L);
     }
-    for(let i=0;i<3;i++){
-      const b=makeBanner(i*91+5);
-      b.position.set(WX(g.W)*(0.20+i*0.30),0,WZ(g.H)*0.09);
-      scene.add(b);
-    }
-  } else if(g.sky==='beach'){
-    const b=makeBanner(41);
-    b.position.set(WX(g.W)*0.74,0,WZ(g.H)*0.86);
-    scene.add(b);
   }
 }
 
@@ -2660,6 +2771,7 @@ function buildScene(g){
 
   buildCoast(g);
   buildStreet(g);
+  buildDead(g);
 
   // held weapon rides the camera
   if(viewModel){ camera.remove(viewModel); viewModel=null; }
@@ -2758,7 +2870,13 @@ function syncScene(g,dt){
     h.jaw.position.y = -.045 - h.jawOpen*.03;
     h.mouth.scale.y = .6 + h.jawOpen*2.4;
 
-    h.grp.position.y = Math.abs(Math.sin(z.gait))*(hunting?.05:.025);
+    const airH=WX(z.z||0);
+    h.grp.position.y = airH + Math.abs(Math.sin(z.gait))*(hunting?.05:.025);
+    if(z.air){                                   // knees up, reaching, mid-leap
+      h.legL.rotation.x=-1.05; h.legR.rotation.x=-0.78;
+      h.armL.rotation.x=-1.25; h.armR.rotation.x=-1.25;
+      h.spine.rotation.x=0.14;
+    }
 
     const hot = hunting;
     h.eyeMat.color.setHex(hot?0xff2a1e:0x611611);
