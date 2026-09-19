@@ -2419,13 +2419,14 @@ const POST_FS=[
 '         +texture2D(tDiffuse,uv+uTexel*vec2(-3.0,-1.0)).rgb',
 '         +texture2D(tDiffuse,uv+uTexel*vec2( 1.0,-3.0)).rgb',
 '         +texture2D(tDiffuse,uv+uTexel*vec2(-1.0, 3.0)).rgb;',
-'  bl=max(bl*0.25-0.42,0.0);',
-'  col+=bl*uBloom;',                       // light adds in linear, so bloom goes here
+'  bl*=0.25;',
+'  float bthr=smoothstep(0.80,1.30,dot(bl,vec3(0.299,0.587,0.114)));',
+'  col+=bl*bthr*uBloom;',                  // light adds in linear, so bloom goes here
 '  col=pow(max(col,0.0),vec3(0.4545));',   // and only now is it a picture
 '  float l=dot(col,vec3(0.299,0.587,0.114));',
-'  col*=mix(vec3(0.76,0.91,1.08),vec3(1.12,0.98,0.84),smoothstep(0.06,0.74,l));',
-'  col=mix(vec3(l),col,0.84);',
-'  col=clamp((col-0.5)*1.12+0.5,0.0,1.8);',
+'  col*=mix(vec3(0.90,0.97,1.07),vec3(1.07,0.99,0.90),smoothstep(0.06,0.74,l));',
+'  col=mix(vec3(l),col,0.90);',
+'  col=clamp((col-0.46)*1.16+0.44,0.0,1.8);',
 '  col*=1.0-uVig*smoothstep(0.16,0.80,r);',
 '  float g=hash(uv*1024.0+fract(uTime));',
 '  col+=(g-0.5)*uGrain*(1.0+uDread*1.7);',
@@ -2442,7 +2443,7 @@ function buildPost(){
     const mat=new THREE.ShaderMaterial({
       uniforms:{tDiffuse:{value:rt.texture}, uTexel:{value:new THREE.Vector2(1/960,1/540)},
                 uTime:{value:0}, uGrain:{value:.052}, uVig:{value:.55},
-                uCA:{value:.0020}, uBloom:{value:.60}, uDread:{value:0}},
+                uCA:{value:.0020}, uBloom:{value:.42}, uDread:{value:0}},
       vertexShader:POST_VS, fragmentShader:POST_FS, depthTest:false, depthWrite:false});
     const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),mat);
     quad.frustumCulled=false;
@@ -3152,7 +3153,9 @@ setInterval(()=>{
 
 // a way to see, from the console or a phone, whether sound is actually leaving
 // the mixer — "is the music broken" is otherwise unanswerable on someone's device
-window.__gfx=function(){
+window.__gfx=function(set){
+  if(set&&post&&typeof set.lens==="boolean") post.on=set.lens;
+  if(set&&post&&set.u) for(const k in set.u){ if(post.mat.uniforms[k]) post.mat.uniforms[k].value=set.u[k]; }
   return {lens: !!post, lensOn: !!(post&&post.on),
           frameMs:+frameAvg.toFixed(1), pixelRatio:renderer?+renderer.getPixelRatio().toFixed(2):null,
           environment: !!(scene&&scene.environment), normalMaps:nrmCache.size};
