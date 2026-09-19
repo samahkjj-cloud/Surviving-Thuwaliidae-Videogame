@@ -1606,7 +1606,32 @@ let renderer,scene,camera,torch,hemi,ambientL,signLight,gateLight,viewModel,lant
 let dyn={infected:[],survivors:[],items:[]};
 let texCache=new Map();
 
+const nrmCache=new Map();
+function nrm(canvas,repeat,strength){
+  const key=(canvas.__id||(canvas.__id=Math.random()))+'|n'+repeat+'|'+(strength||1);
+  if(nrmCache.has(key)) return nrmCache.get(key);
+  const w=canvas.width,h=canvas.height;
+  const src=canvas.getContext('2d').getImageData(0,0,w,h).data;
+  const lum=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++) lum[i]=(src[i*4]*.299+src[i*4+1]*.587+src[i*4+2]*.114)/255;
+  const at=(x,y)=>lum[((y%h)+h)%h*w+(((x%w)+w)%w)];
+  const out=document.createElement('canvas'); out.width=w; out.height=h;
+  const ctx=out.getContext('2d'), img=ctx.createImageData(w,h), S=(strength||1)*2.4;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const dx=(at(x-1,y-1)+2*at(x-1,y)+at(x-1,y+1))-(at(x+1,y-1)+2*at(x+1,y)+at(x+1,y+1));
+    const dy=(at(x-1,y-1)+2*at(x,y-1)+at(x+1,y-1))-(at(x-1,y+1)+2*at(x,y+1)+at(x+1,y+1));
+    const nx=dx*S, ny=dy*S, l=Math.sqrt(nx*nx+ny*ny+1), i=(y*w+x)*4;
+    img.data[i]=((nx/l)*.5+.5)*255; img.data[i+1]=((ny/l)*.5+.5)*255;
+    img.data[i+2]=((1/l)*.5+.5)*255; img.data[i+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  const t=new THREE.CanvasTexture(out);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(repeat,repeat); t.anisotropy=4;
+  nrmCache.set(key,t);
+  return t;
+}
 function tex(canvas,repeat){
+
   const key=canvas.__id||(canvas.__id=Math.random());
   const k=key+'|'+repeat;
   if(texCache.has(k)) return texCache.get(k);
@@ -1625,8 +1650,9 @@ function initGL(){
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=0.82;
+  renderer.toneMappingExposure=0.80;
   camera=new THREE.PerspectiveCamera(60,16/9,0.08,420);
+  buildPost();
   resizeGL();
   addEventListener('resize',resizeGL);
   addEventListener('orientationchange',()=>setTimeout(resizeGL,180));
@@ -1638,9 +1664,39 @@ function resizeGL(){
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
   camera.updateProjectionMatrix();
+  sizePost();
+}
+
+let envRT=null;
+const ENV_SKY={
+  sunset:[[0,'#131a33'],[.40,'#4a3d5c'],[.52,'#8a4f55'],[.60,'#d9743d'],[.65,'#f2a24a'],[.69,'#3a2a20'],[1,'#15100c']],
+  night :[[0,'#04080c'],[.46,'#0a131a'],[.58,'#16242c'],[.64,'#0a0f12'],[1,'#04070a']],
+  market:[[0,'#0e0b08'],[.50,'#1a1410'],[.62,'#2a2018'],[.68,'#100c09'],[1,'#080605']],
+  beach :[[0,'#25313a'],[.48,'#4a5a63'],[.60,'#65727a'],[.66,'#2c2925'],[1,'#151311']]
+};
+function buildEnv(g){
+  if(!renderer||!THREE.PMREMGenerator) return;
+  const key = g.sunset ? 'sunset' : (ENV_SKY[g.sky] ? g.sky : 'beach');
+  const c=document.createElement('canvas'); c.width=256; c.height=128;
+  const x=c.getContext('2d');
+  const grd=x.createLinearGradient(0,0,0,c.height);
+  for(const st of ENV_SKY[key]) grd.addColorStop(st[0],st[1]);
+  x.fillStyle=grd; x.fillRect(0,0,c.width,c.height);
+  x.fillStyle='rgba(0,0,0,0.74)'; x.fillRect(0,0,c.width,c.height);
+  try{
+    const t=new THREE.CanvasTexture(c);
+    t.mapping=THREE.EquirectangularReflectionMapping;
+    const pm=new THREE.PMREMGenerator(renderer);
+    pm.compileEquirectangularShader();
+    const rt=pm.fromEquirectangular(t);
+    if(envRT) envRT.dispose();
+    envRT=rt; scene.environment=rt.texture;
+    pm.dispose(); t.dispose();
+  }catch(e){ /* an old driver: the scene simply keeps its direct lighting */ }
 }
 
 function disposeScene(){
+
   if(!scene) return;
   scene.traverse(o=>{
     if(o.geometry) o.geometry.dispose();
@@ -1657,10 +1713,14 @@ function disposeScene(){
 function makeInfected(){
   const grp=new THREE.Group();
   grp.rotation.order='YXZ';
-  const flesh=new THREE.MeshStandardMaterial({map:tex(TEX.flesh,1),bumpMap:tex(TEX.flesh,1),
-    bumpScale:.012,roughness:.98,color:0x9aa08c});
-  const rag=new THREE.MeshStandardMaterial({map:tex(TEX.rag,1),bumpMap:tex(TEX.rag,1),
-    bumpScale:.01,roughness:1,color:0x8e8a80});
+  // skin that has been in the sun and then in the water: damp in the low
+  // places, dry and bleached on the high ones
+  const flesh=new THREE.MeshStandardMaterial({map:tex(TEX.flesh,1),
+    normalMap:nrm(TEX.flesh,1,1.5), normalScale:new THREE.Vector2(1.1,1.1),
+    roughness:.82,metalness:.02,envMapIntensity:.30,color:0x9aa08c});
+  const rag=new THREE.MeshStandardMaterial({map:tex(TEX.rag,1),
+    normalMap:nrm(TEX.rag,1,1.3), normalScale:new THREE.Vector2(1,1),
+    roughness:.97,metalness:0,envMapIntensity:.15,color:0x8e8a80});
   const mk=(geo,mat,x,y,z,parent)=>{
     const m=new THREE.Mesh(geo,mat);
     m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true;
@@ -1833,8 +1893,19 @@ function hullPath(sx,sy,inset){
   return p;
 }
 
+function capEnv(max){
+  if(!scene) return;
+  scene.traverse(o=>{
+    const ms = o.material ? (Array.isArray(o.material)?o.material:[o.material]) : [];
+    for(const m of ms){
+      if(m && m.isMeshStandardMaterial && m.envMapIntensity>max){
+        m.envMapIntensity=max; m.needsUpdate=true;
+      }
+    }
+  });
+}
 function safeBuild(g){
-  try{ buildScene(g); }
+  try{ buildScene(g); capEnv(0.30); }
   catch(err){ console.error("scene build failed:",err); }
 }
 function buildScene(g){
@@ -1843,12 +1914,17 @@ function buildScene(g){
   scene=new THREE.Scene();
   scene.background=new THREE.Color(g.fogColor);
   scene.fog=new THREE.FogExp2(g.fogColor,g.fogDensity);
+  buildEnv(g);                     // something for every wet surface to reflect
+  builtAt=performance.now(); frameAvg=16;
 
   // ground
   const floorTex=tex(g.floor,g.floorRepeat);
   const floor=new THREE.Mesh(
     new THREE.PlaneGeometry(WX(g.W),WZ(g.H)),
-    new THREE.MeshStandardMaterial({map:floorTex,bumpMap:floorTex,bumpScale:.035,roughness:.98,metalness:0})
+    new THREE.MeshStandardMaterial({map:floorTex,
+      normalMap:nrm(g.floor,g.floorRepeat,1.15),
+      normalScale:new THREE.Vector2(.85,.85),
+      roughness:.94,metalness:.04,envMapIntensity:.22})
   );
   floor.rotation.x=-Math.PI/2;
   floor.position.set(WX(g.W)/2,0,WZ(g.H)/2);
@@ -1973,10 +2049,10 @@ function buildScene(g){
       new THREE.BoxGeometry(WX(o.w),WX(o.h),WZ(o.d)),
       new THREE.MeshStandardMaterial({
         map:tex(o.tex,Math.max(1,Math.round(o.w/60))),
-        bumpMap:tex(o.tex,Math.max(1,Math.round(o.w/60))),
-        bumpScale:.03,
+        normalMap:nrm(o.tex,Math.max(1,Math.round(o.w/60)),1.0),
+        normalScale:new THREE.Vector2(.8,.8),
         color:new THREE.Color(o.tint,o.tint,o.tint),
-        roughness:.95
+        roughness:.92,metalness:.05,envMapIntensity:.20
       })
     );
     m.position.set(WX(o.x+o.w/2),WX(o.h)/2,WZ(o.y+o.d/2));
@@ -2092,9 +2168,9 @@ function buildScene(g){
 
   // lights
   if(g.sunset){
-    hemi=new THREE.HemisphereLight(0xffb072,0x2e1f20,g.ambient);
+    hemi=new THREE.HemisphereLight(0xffb072,0x2e1f20,g.ambient*.62);
     scene.add(hemi);
-    ambientL=new THREE.AmbientLight(0x5a3a4e,g.ambient*.30);
+    ambientL=new THREE.AmbientLight(0x5a3a4e,g.ambient*.16);
     scene.add(ambientL);
     // the sun sits on the water behind the wreck, so everything throws a long shadow inland
     const sun=new THREE.DirectionalLight(0xff8a3d,2.1);
@@ -2111,9 +2187,9 @@ function buildScene(g){
     fill.position.set(-WX(g.W)*.2, 22, WZ(g.H)*1.2);
     scene.add(fill);
   } else {
-    hemi=new THREE.HemisphereLight(0x9fb4bd,0x3a3229,g.ambient);
+    hemi=new THREE.HemisphereLight(0x9fb4bd,0x3a3229,g.ambient*.66);
     scene.add(hemi);
-    ambientL=new THREE.AmbientLight(0x5a6a72,g.ambient*.22);
+    ambientL=new THREE.AmbientLight(0x5a6a72,g.ambient*.12);
     scene.add(ambientL);
   }
 
@@ -2341,19 +2417,105 @@ function syncScene(g,dt){
   }
 }
 
+/* ---------------- the lens ----------------
+   the scene is rendered into a buffer, then photographed: a filmic grade with
+   cold shadows and warm light, a little bloom, chromatic aberration that grows
+   toward the edges the way a real lens does, a vignette, and grain that thickens
+   as the dread rises. this pass is most of the difference between a render and
+   a photograph, and it is the first thing dropped if the device cannot keep up */
+const POST_VS='varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }';
+const POST_FS=[
+'precision highp float;',
+'varying vec2 vUv;',
+'uniform sampler2D tDiffuse;',
+'uniform vec2 uTexel;',
+'uniform float uTime,uGrain,uVig,uCA,uBloom,uDread;',
+'float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }',
+'void main(){',
+'  vec2 uv=vUv; vec2 c=uv-0.5; float r=dot(c,c);',
+'  float ca=uCA*(0.55+r*2.4);',
+'  vec3 col;',
+'  col.r=texture2D(tDiffuse,uv+c*ca).r;',
+'  col.g=texture2D(tDiffuse,uv).g;',
+'  col.b=texture2D(tDiffuse,uv-c*ca).b;',
+'  vec3 bl=texture2D(tDiffuse,uv+uTexel*vec2( 3.0, 1.0)).rgb',
+'         +texture2D(tDiffuse,uv+uTexel*vec2(-3.0,-1.0)).rgb',
+'         +texture2D(tDiffuse,uv+uTexel*vec2( 1.0,-3.0)).rgb',
+'         +texture2D(tDiffuse,uv+uTexel*vec2(-1.0, 3.0)).rgb;',
+'  bl*=0.25;',
+'  float bthr=smoothstep(0.80,1.30,dot(bl,vec3(0.299,0.587,0.114)));',
+'  col+=bl*bthr*uBloom;',                  // light adds in linear, so bloom goes here
+'  col=pow(max(col,0.0),vec3(0.4545));',   // and only now is it a picture
+'  float l=dot(col,vec3(0.299,0.587,0.114));',
+'  col*=mix(vec3(0.90,0.97,1.07),vec3(1.07,0.99,0.90),smoothstep(0.06,0.74,l));',
+'  col=mix(vec3(l),col,0.90);',
+'  col=clamp((col-0.46)*1.16+0.44,0.0,1.8);',
+'  col*=1.0-uVig*smoothstep(0.16,0.80,r);',
+'  float g=hash(uv*1024.0+fract(uTime));',
+'  col+=(g-0.5)*uGrain*(1.0+uDread*1.7);',
+'  gl_FragColor=vec4(col,1.0);',
+'}'].join('\n');
+
+let post=null;
+function buildPost(){
+  if(post||!renderer) return;
+  try{
+    const rt=new THREE.WebGLRenderTarget(2,2,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,
+      format:THREE.RGBAFormat, depthBuffer:true, stencilBuffer:false});
+    // the target stays linear; this pass encodes for the display itself
+    const mat=new THREE.ShaderMaterial({
+      uniforms:{tDiffuse:{value:rt.texture}, uTexel:{value:new THREE.Vector2(1/960,1/540)},
+                uTime:{value:0}, uGrain:{value:.052}, uVig:{value:.55},
+                uCA:{value:.0020}, uBloom:{value:.42}, uDread:{value:0}},
+      vertexShader:POST_VS, fragmentShader:POST_FS, depthTest:false, depthWrite:false});
+    const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),mat);
+    quad.frustumCulled=false;
+    const sc=new THREE.Scene(); sc.add(quad);
+    post={rt,mat,scene:sc,cam:new THREE.OrthographicCamera(-1,1,1,-1,0,1),on:true};
+    sizePost();
+  }catch(e){ post=null; }
+}
+function sizePost(){
+  if(!post||!renderer) return;
+  const v=new THREE.Vector2(); renderer.getDrawingBufferSize(v);
+  post.rt.setSize(Math.max(2,v.x),Math.max(2,v.y));
+  post.mat.uniforms.uTexel.value.set(1/Math.max(2,v.x),1/Math.max(2,v.y));
+}
+function renderFrame(){
+  if(post&&post.on){
+    post.mat.uniforms.uTime.value=t;
+    post.mat.uniforms.uDread.value=G?(G.dread||0):0;
+    renderer.setRenderTarget(post.rt);
+    renderer.render(scene,camera);
+    renderer.setRenderTarget(null);
+    renderer.render(post.scene,post.cam);
+  } else {
+    renderer.render(scene,camera);
+  }
+}
+
 /* ---------------- loop ---------------- */
-let frameAvg=16;
+
+let frameAvg=16, builtAt=0;
 function loop(now){
   const dt=Math.min(.05,(now-last)/1000);
   last=now; t+=dt;
   frameAvg+=((dt*1000)-frameAvg)*0.05;
-  if(frameAvg>34 && renderer.getPixelRatio()>0.85) renderer.setPixelRatio(Math.max(0.85,renderer.getPixelRatio()-0.12));
+  // building a scene costs several slow frames on purpose — the normal maps and
+  // the environment are generated there — so the governor stays quiet until the
+  // frame time has settled, or it would switch the lens off over a loading spike
+  if(now-builtAt > 2500){
+    // the lens costs a full-screen pass: on a device that genuinely cannot hold
+    // the frame it goes first, before the picture is allowed to get smaller
+    if(frameAvg>40 && post && post.on) post.on=false;
+    if(frameAvg>34 && renderer.getPixelRatio()>0.85) renderer.setPixelRatio(Math.max(0.85,renderer.getPixelRatio()-0.12));
+  }
   if(paused){ /* held */ }
   else if(intro) updateIntro(dt);
   else if(outro) updateOutro(dt);
   else if(running) update(dt);
   syncScene(G,dt);
-  renderer.render(scene,camera);
+  renderFrame();
   updateHUD();
   raf=requestAnimationFrame(loop);
 }
@@ -3014,6 +3176,13 @@ setInterval(()=>{
 
 // a way to see, from the console or a phone, whether sound is actually leaving
 // the mixer — "is the music broken" is otherwise unanswerable on someone's device
+window.__gfx=function(set){
+  if(set&&post&&typeof set.lens==="boolean") post.on=set.lens;
+  if(set&&post&&set.u) for(const k in set.u){ if(post.mat.uniforms[k]) post.mat.uniforms[k].value=set.u[k]; }
+  return {lens: !!post, lensOn: !!(post&&post.on),
+          frameMs:+frameAvg.toFixed(1), pixelRatio:renderer?+renderer.getPixelRatio().toFixed(2):null,
+          environment: !!(scene&&scene.environment), normalMaps:nrmCache.size};
+};
 window.__audioProbe=function(ms){
   const r={ctx:AC?AC.state:'none',on,armed,playing:!!mus.playing,
            level:+(mus.level||0).toFixed(3),
