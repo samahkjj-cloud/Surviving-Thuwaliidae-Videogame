@@ -795,24 +795,81 @@ function buildTextures(){
     grit(x,w,h,31,2200,.03,.12,true);
   });
   // the plain white one, and the thobe: the same cloth at different wear
+  // a thobe is white, and that is the point: it shows every single thing that
+  // has happened to it. so the cloth stays white and the blood does the talking
   TEX.thobe=makeTex(256,256,(x,w,h)=>{
-    x.fillStyle='#ddd8ca'; x.fillRect(0,0,w,h);
+    x.fillStyle='#f2efe7'; x.fillRect(0,0,w,h);
     const r=rng(47);
     for(let i=0;i<w;i+=3){                   // a woven grain, very fine
-      x.fillStyle=`rgba(0,0,0,${.02+r()*.03})`;
+      x.fillStyle=`rgba(0,0,0,${.015+r()*.022})`;
       x.fillRect(i,0,1,h);
     }
-    for(let i=0;i<180;i++){
-      const a=.06+r()*.30;
-      x.fillStyle=r()<.62?`rgba(122,106,80,${a})`:`rgba(88,17,12,${a})`;
-      const s=8+r()*54;
-      x.beginPath(); x.ellipse(r()*w,r()*h,s,s*(.35+r()*.8),r()*3,0,6.28); x.fill();
+    // a little grey where cloth creases and holds dust — and no more than that
+    for(let i=0;i<34;i++){
+      x.fillStyle=`rgba(126,118,102,${.04+r()*.10})`;
+      const s=10+r()*46;
+      x.beginPath(); x.ellipse(r()*w,r()*h,s,s*(.4+r()*.7),r()*3,0,6.28); x.fill();
     }
-    // the hem drags: the bottom of a thobe is always the filthiest part
-    const g2=x.createLinearGradient(0,h*.55,0,h);
-    g2.addColorStop(0,'rgba(60,48,34,0)'); g2.addColorStop(1,'rgba(48,38,26,.55)');
-    x.fillStyle=g2; x.fillRect(0,h*.55,w,h*.45);
-    grit(x,w,h,53,1800,.02,.09,true);
+    // blood: a soaked core, a spread halo, and dried spatter around it
+    for(let i=0;i<9;i++){
+      const cx=r()*w, cy=r()*h, R=16+r()*52;
+      const halo=x.createRadialGradient(cx,cy,R*.15,cx,cy,R);
+      halo.addColorStop(0,'rgba(104,12,10,0.88)');
+      halo.addColorStop(.45,'rgba(132,26,20,0.52)');
+      halo.addColorStop(1,'rgba(150,54,42,0)');
+      x.fillStyle=halo;
+      x.beginPath(); x.ellipse(cx,cy,R,R*(.55+r()*.7),r()*3,0,6.28); x.fill();
+      for(let k=0;k<16;k++){                 // thrown droplets, not a wash
+        const a=r()*6.28, d=R*(.8+r()*1.5), sz=.8+r()*3.4;
+        x.fillStyle=`rgba(${96+r()*40|0},${14+r()*16|0},${10+r()*12|0},${.35+r()*.5})`;
+        x.beginPath(); x.ellipse(cx+Math.cos(a)*d,cy+Math.sin(a)*d,sz,sz*(.5+r()),a,0,6.28); x.fill();
+      }
+    }
+    // runs, where it soaked in and travelled down the weave
+    for(let i=0;i<14;i++){
+      const cx=r()*w, cy=r()*h, len=14+r()*70;
+      x.strokeStyle=`rgba(${92+r()*30|0},18,14,${.30+r()*.4})`;
+      x.lineWidth=1+r()*3.4;
+      x.beginPath(); x.moveTo(cx,cy);
+      x.bezierCurveTo(cx+(r()-.5)*7,cy+len*.4,cx+(r()-.5)*9,cy+len*.75,cx+(r()-.5)*5,cy+len);
+      x.stroke();
+    }
+    const g2=x.createLinearGradient(0,h*.66,0,h);
+    g2.addColorStop(0,'rgba(58,46,32,0)'); g2.addColorStop(1,'rgba(52,40,28,.42)');
+    x.fillStyle=g2; x.fillRect(0,h*.66,w,h*.34);
+    grit(x,w,h,53,1500,.015,.06,true);
+  });
+  // where the cloth is simply gone. read as an alpha cut, so the tears are
+  // real holes with the body behind them, not painted shadows
+  TEX.thobeTorn=makeTex(256,256,(x,w,h)=>{
+    x.fillStyle='#ffffff'; x.fillRect(0,0,w,h);
+    const r=rng(97);
+    for(let i=0;i<13;i++){                   // ragged holes
+      const cx=r()*w, cy=r()*h*.92, R=4+r()*17;
+      x.fillStyle='#000';
+      x.beginPath();
+      for(let k=0;k<=12;k++){
+        const a=k/12*6.283, rr=R*(.45+r()*1.1);
+        const px=cx+Math.cos(a)*rr, py=cy+Math.sin(a)*rr*.8;
+        k?x.lineTo(px,py):x.moveTo(px,py);
+      }
+      x.closePath(); x.fill();
+    }
+    for(let i=0;i<7;i++){                    // long splits, following the weave
+      const cx=r()*w, cy=r()*h*.5, len=30+r()*90, wd=1.5+r()*5;
+      x.fillStyle='#000';
+      x.beginPath();
+      x.moveTo(cx,cy);
+      x.lineTo(cx+wd+r()*4,cy+len*.5);
+      x.lineTo(cx,cy+len);
+      x.lineTo(cx-wd-r()*3,cy+len*.5);
+      x.closePath(); x.fill();
+    }
+    // and the hem is chewed away entirely
+    for(let i=0;i<w;i+=2){
+      const bite=h-(2+r()*22);
+      x.fillStyle='#000'; x.fillRect(i,bite,3,h-bite);
+    }
   });
   // palm bark: stacked frond scars, the way a trunk actually grows
   TEX.bark=makeTex(128,256,(x,w,h)=>{
@@ -1830,7 +1887,8 @@ function makeInfected(){
     const clothMat=new THREE.MeshStandardMaterial({
       map:tex(TEX.thobe,1), normalMap:nrm(TEX.thobe,1,1.1),
       normalScale:new THREE.Vector2(.9,.9),
-      color: dark?0x2a2724:(0xc9c2b0-(Math.random()*0x0a0a0a|0)),
+      alphaMap:tex(TEX.thobeTorn,1), alphaTest:.5,   // torn through, not painted
+      color: dark?0x322e2a:0xfbf8f2,
       roughness:.99,metalness:0,envMapIntensity:.12,side:THREE.DoubleSide});
     cloths.push(clothMat);
     // the robe: open at the bottom so it reads as cloth, not a cone of plastic
@@ -2087,7 +2145,138 @@ function makeSkyline(night){
   return g;
 }
 
+/* a car that was left in a hurry and has been sitting in salt air ever since */
+let carMats=null;
+function makeCar(seed){
+  const r=rng(seed);
+  if(!carMats){
+    carMats={
+      body:new THREE.MeshStandardMaterial({map:tex(TEX.hull,2),
+        normalMap:nrm(TEX.hull,2,1.2), normalScale:new THREE.Vector2(.9,.9),
+        color:0x6d6a63,roughness:.72,metalness:.45,envMapIntensity:.28}),
+      glass:new THREE.MeshStandardMaterial({color:0x14181a,roughness:.22,metalness:.55,
+        envMapIntensity:.30,transparent:true,opacity:.62}),
+      tyre:new THREE.MeshStandardMaterial({color:0x141312,roughness:.98,metalness:0,
+        envMapIntensity:.06})
+    };
+  }
+  const g2=new THREE.Group();
+  const paint=carMats.body.clone();
+  // the colours that survive out here: white, sand, and rust
+  paint.color.setHex([0xb9b3a6,0xa89a7f,0x8d7a63,0x9aa2a4,0x7d5a44][(r()*5)|0]);
+  const L=4.4+r()*.7, W=1.82, H=.72;
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(L,H,W),paint);
+  hull.position.y=.62; hull.castShadow=hull.receiveShadow=true; g2.add(hull);
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(L*.48,.60,W*.90),paint);
+  cab.position.set(-L*.04,1.24,0); cab.castShadow=true; g2.add(cab);
+  const glass=new THREE.Mesh(new THREE.BoxGeometry(L*.44,.40,W*.93),carMats.glass);
+  glass.position.set(-L*.04,1.30,0); g2.add(glass);
+  const wheel=new THREE.CylinderGeometry(.34,.34,.24,12);
+  const flat=(r()*4)|0;                       // one of them is always gone
+  let i=0;
+  for(const wx of [L*.32,-L*.32]) for(const wz of [W*.52,-W*.52]){
+    if(i===flat && r()<.7){ i++; continue; }
+    const t2=new THREE.Mesh(wheel,carMats.tyre);
+    t2.rotation.x=Math.PI/2;
+    t2.position.set(wx,.30,wz); t2.castShadow=true; g2.add(t2);
+    i++;
+  }
+  if(r()<.45){                                // a door left hanging open
+    const door=new THREE.Mesh(new THREE.BoxGeometry(1.25,.70,.07),paint);
+    door.position.set(-L*.05,.66,W*.52+.28);
+    door.rotation.y=-0.9; door.castShadow=true; g2.add(door);
+  }
+  g2.rotation.z=(r()-.5)*.14;                 // settled on dead suspension
+  return g2;
+}
+
+/* a banner on a pole: the green of the place, without the flag itself —
+   the national flag carries the shahada, and it does not belong on a torn
+   cloth in a game about the dead */
+function makeBanner(seed){
+  const r=rng(seed);
+  const g2=new THREE.Group();
+  const poleMat=new THREE.MeshStandardMaterial({color:0x8d9095,roughness:.52,metalness:.62,
+    envMapIntensity:.35});
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.045,.055,5.2,8),poleMat);
+  pole.position.y=2.6; pole.castShadow=true; g2.add(pole);
+  const clothMat=new THREE.MeshStandardMaterial({color:0x1d6b3f,roughness:.94,metalness:0,
+    envMapIntensity:.12,side:THREE.DoubleSide});
+  const cloth=new THREE.Mesh(new THREE.PlaneGeometry(1.5,.95,6,3),clothMat);
+  cloth.position.set(.76,4.42,0); cloth.castShadow=true;
+  const pos=cloth.geometry.attributes.position;
+  for(let i=0;i<pos.count;i++){               // hanging slack, never flat
+    const x=pos.getX(i), y=pos.getY(i);
+    pos.setZ(i, Math.sin((x+.75)*2.1)*.09*((x+.75)/1.5) + Math.cos(y*3)*.03);
+  }
+  pos.needsUpdate=true; cloth.geometry.computeVertexNormals();
+  g2.add(cloth);
+  g2.rotation.y=r()*6.28;
+  return g2;
+}
+
+/* the corniche lamps. the cone is the point: in fog, a light you can see the
+   shape of is worth more than a light that only brightens the ground */
+function makeLamp(lit){
+  const g2=new THREE.Group();
+  const steel=new THREE.MeshStandardMaterial({color:0x4e5457,roughness:.58,metalness:.6,
+    envMapIntensity:.3});
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(.062,.085,5.0,8),steel);
+  post.position.y=2.5; post.castShadow=true; g2.add(post);
+  const arm=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.86,6),steel);
+  arm.position.set(.40,4.92,0); arm.rotation.z=Math.PI/2-.30; arm.castShadow=true; g2.add(arm);
+  const headMat=new THREE.MeshStandardMaterial({
+    color: lit?0xfff0cf:0x2a2a28,
+    emissive: lit?0xffca78:0x000000, emissiveIntensity: lit?2.4:0, roughness:.4});
+  const head=new THREE.Mesh(new THREE.BoxGeometry(.46,.14,.24),headMat);
+  head.position.set(.80,4.80,0); g2.add(head);
+  if(lit){
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(1.9,4.7,14,1,true),
+      new THREE.MeshBasicMaterial({color:0xffc878,transparent:true,opacity:.055,
+        side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));
+    cone.position.set(.80,2.45,0); g2.add(cone);
+    const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:tex(TEX.glow,1),color:0xffc06a,
+      opacity:.75,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
+    halo.scale.set(3.2,3.2,1); halo.position.set(.80,4.80,0); g2.add(halo);
+  }
+  return g2;
+}
+
+function buildStreet(g){
+  const r=rng(g.screen*331+7);
+  // cars: on the corniche they are abandoned in the road; on the beach road
+  // there are only a couple, run off the edge
+  const n = g.sky==='night' ? 6 : (g.sky==='beach' ? 3 : 0);
+  for(let i=0;i<n;i++){
+    const c=makeCar(g.screen*17+i*53);
+    const t=(i+.5)/n;
+    const x = WX(g.W)*(0.10+t*0.80)+(r()-.5)*WX(60);
+    const z = g.sky==='night' ? WZ(g.H)*(0.22+r()*0.20) : WZ(g.H)*(0.80+r()*0.14);
+    c.position.set(x,0,z);
+    c.rotation.y=r()*6.28;
+    scene.add(c);
+  }
+  if(g.sky==='night'){
+    for(let i=0;i<7;i++){                     // lamps down the promenade
+      const lit = (i%3)!==1;                  // two burning, one dead, repeating
+      const L=makeLamp(lit);
+      L.position.set(WX(g.W)*(0.08+i*0.14), 0, WZ(g.H)*0.16);
+      scene.add(L);
+    }
+    for(let i=0;i<3;i++){
+      const b=makeBanner(i*91+5);
+      b.position.set(WX(g.W)*(0.20+i*0.30),0,WZ(g.H)*0.09);
+      scene.add(b);
+    }
+  } else if(g.sky==='beach'){
+    const b=makeBanner(41);
+    b.position.set(WX(g.W)*0.74,0,WZ(g.H)*0.86);
+    scene.add(b);
+  }
+}
+
 function buildCoast(g){
+
   const sea = (g.sky==='beach'||g.sky==='night');
   if(!sea) return;
   // the headland, set well beyond the far wall
@@ -2470,6 +2659,7 @@ function buildScene(g){
   }
 
   buildCoast(g);
+  buildStreet(g);
 
   // held weapon rides the camera
   if(viewModel){ camera.remove(viewModel); viewModel=null; }
@@ -2519,17 +2709,34 @@ function syncScene(g,dt){
     if(z.dead||!g.infected.includes(z)){ h.grp.visible=false; continue; }
     h.grp.visible=true;
     h.grp.position.set(WX(z.x),0,WZ(z.y));
-    h.grp.rotation.y = -(z.face!==undefined?z.face:0) - Math.PI/2;
-
     const hunting = z.seen || z.watched;
+    const attacking = (z.atk||0)>0;
+    // while it is swinging at you it looks at you, whatever it was doing before
+    const want = attacking ? Math.atan2(P.y-z.y,P.x-z.x)
+                           : (z.face!==undefined?z.face:0);
+    const target = Math.PI/2 - want;
+    if(h.yaw===undefined) h.yaw=target;
+    // and it turns rather than snapping — fast when it has you, slow otherwise
+    let dy=target-h.yaw;
+    while(dy> Math.PI) dy-=Math.PI*2;
+    while(dy<-Math.PI) dy+=Math.PI*2;
+    h.yaw += dy*Math.min(1, dt*(attacking?16:(hunting?9:3.4)));
+    h.grp.rotation.y = h.yaw;
+
+    // a shamble, not a march: one leg drags, and the weight falls onto it
+    if(h.limp===undefined) h.limp=Math.random()<.5?1:-1;
     const sw=Math.sin(z.gait)*(hunting?.78:.36);
-    // the legs swing wide and out of phase with the arms — a broken walk
-    h.legL.rotation.x= sw;        h.legR.rotation.x=-sw;
+    const drag=(h.limp>0?Math.max(sw,-sw*.25):Math.max(-sw,sw*.25));
+    h.legL.rotation.x = h.limp>0 ? drag : -sw;
+    h.legR.rotation.x = h.limp>0 ? -sw  :  drag;
     h.armL.rotation.x=-sw*.42-.18; h.armR.rotation.x= sw*.42-.18;
     h.armL.rotation.z= .10+Math.sin(z.gait*1.7)*.07;
     h.armR.rotation.z=-.10-Math.sin(z.gait*1.7)*.07;
+    // the weight pitches sideways over the bad leg on every other step
+    h.grp.rotation.z = Math.sin(z.gait)*(hunting?.075:.045)*h.limp;
     // it folds further forward the closer it gets to you
     h.spine.rotation.x = 0.30 + (hunting?0.34:0) + Math.sin(z.gait*2)*.03;
+    h.spine.rotation.z = Math.sin(z.gait+1.1)*.05*h.limp;
 
     // involuntary spasms: the head snaps, then holds still too long
     h.twitch-=dt;
@@ -2568,7 +2775,7 @@ function syncScene(g,dt){
     } else {
       h.grp.rotation.x=0;
       const a=Math.atan2(P.y-s.y,P.x-s.x);
-      h.grp.rotation.y=-a-Math.PI/2;
+      h.grp.rotation.y=Math.PI/2-a;
       const sw=s.state==='follow'?Math.sin(s.gait)*.5:0;
       h.legL.rotation.x=sw; h.legR.rotation.x=-sw;
       if(s.state==='trapped'){
