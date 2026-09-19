@@ -780,7 +780,70 @@ function buildTextures(){
       x.fillStyle=g; x.beginPath(); x.arc(cx,cy,rad,0,6.29); x.fill();
     }
   });
+  // ---- what people here were wearing when it happened ----------------
+  // the red-and-white ghutra: a crosshatch, then sun, then everything that
+  // has happened to it since
+  TEX.shemagh=makeTex(256,256,(x,w,h)=>{
+    x.fillStyle='#e9e4d8'; x.fillRect(0,0,w,h);
+    const r=rng(23), step=32;
+    x.strokeStyle='#b23b30';
+    for(let i=0;i<=w;i+=step){
+      x.lineWidth=(i%(step*2)===0)?7:2.5;
+      x.beginPath(); x.moveTo(i,0); x.lineTo(i,h); x.stroke();
+      x.beginPath(); x.moveTo(0,i); x.lineTo(w,i); x.stroke();
+    }
+    x.globalAlpha=.30;                       // the knots where the weave crosses
+    for(let i=step/2;i<w;i+=step) for(let j=step/2;j<h;j+=step){
+      x.fillStyle='#b23b30'; x.fillRect(i-2,j-2,4,4);
+    }
+    x.globalAlpha=1;
+    for(let i=0;i<220;i++){                  // dust, sweat, and worse
+      const a=.05+r()*.22;
+      x.fillStyle=r()<.72?`rgba(120,104,78,${a})`:`rgba(96,20,14,${a})`;
+      const s=6+r()*40;
+      x.beginPath(); x.ellipse(r()*w,r()*h,s,s*(.4+r()*.7),r()*3,0,6.28); x.fill();
+    }
+    grit(x,w,h,31,2200,.03,.12,true);
+  });
+  // the plain white one, and the thobe: the same cloth at different wear
+  TEX.thobe=makeTex(256,256,(x,w,h)=>{
+    x.fillStyle='#ddd8ca'; x.fillRect(0,0,w,h);
+    const r=rng(47);
+    for(let i=0;i<w;i+=3){                   // a woven grain, very fine
+      x.fillStyle=`rgba(0,0,0,${.02+r()*.03})`;
+      x.fillRect(i,0,1,h);
+    }
+    for(let i=0;i<180;i++){
+      const a=.06+r()*.30;
+      x.fillStyle=r()<.62?`rgba(122,106,80,${a})`:`rgba(88,17,12,${a})`;
+      const s=8+r()*54;
+      x.beginPath(); x.ellipse(r()*w,r()*h,s,s*(.35+r()*.8),r()*3,0,6.28); x.fill();
+    }
+    // the hem drags: the bottom of a thobe is always the filthiest part
+    const g2=x.createLinearGradient(0,h*.55,0,h);
+    g2.addColorStop(0,'rgba(60,48,34,0)'); g2.addColorStop(1,'rgba(48,38,26,.55)');
+    x.fillStyle=g2; x.fillRect(0,h*.55,w,h*.45);
+    grit(x,w,h,53,1800,.02,.09,true);
+  });
+  // palm bark: stacked frond scars, the way a trunk actually grows
+  TEX.bark=makeTex(128,256,(x,w,h)=>{
+    x.fillStyle='#6b5a44'; x.fillRect(0,0,w,h);
+    const r=rng(67);
+    for(let y=0;y<h;y+=13){
+      const off=(y/13)%2?6:0;
+      for(let i=-1;i<w/22+1;i++){
+        x.fillStyle=`rgba(${58+r()*40|0},${46+r()*32|0},${32+r()*22|0},1)`;
+        x.fillRect(i*22+off,y,19,10);
+        x.fillStyle='rgba(0,0,0,.28)';
+        x.fillRect(i*22+off,y+9,19,3);
+      }
+    }
+    grit(x,w,h,71,2400,.03,.14,true);
+    grit(x,w,h,72,900,.02,.07,false);
+  });
+
   TEX.sand=makeTex(512,512,(x,w,h)=>{
+
     x.fillStyle='#6d6154'; x.fillRect(0,0,w,h);
     const r=rng(71);
     for(let i=0;i<9000;i++){
@@ -1766,8 +1829,65 @@ function makeInfected(){
   mk(new THREE.CylinderGeometry(.062,.040,1.00,7),rag,0,-.50,0,legL);
   mk(new THREE.CylinderGeometry(.062,.040,1.00,7),rag,0,-.50,0,legR);
 
+  // ---- and what they were wearing ----------------------------------
+  // this is the part that makes them from here and not from anywhere else:
+  // a thobe to the ankle, a ghutra held by an agal, an abaya. the cloth is
+  // the identity — the anatomy underneath is the same everywhere
+  const V=(Math.random()*100)|0;
+  const kind = V<42 ? 'thobe' : V<62 ? 'thobe-bare' : V<82 ? 'abaya' : 'stripped';
+  const dark = kind==='abaya';
+  const cloths=[];
+  if(kind!=='stripped'){
+    const clothMat=new THREE.MeshStandardMaterial({
+      map:tex(TEX.thobe,1), normalMap:nrm(TEX.thobe,1,1.1),
+      normalScale:new THREE.Vector2(.9,.9),
+      color: dark?0x2a2724:(0xc9c2b0-(Math.random()*0x0a0a0a|0)),
+      roughness:.99,metalness:0,envMapIntensity:.12,side:THREE.DoubleSide});
+    cloths.push(clothMat);
+    // the robe: open at the bottom so it reads as cloth, not a cone of plastic
+    const robe=mk(new THREE.CylinderGeometry(.215,.40,1.34,14,1,true),clothMat,0,-.56,0,spine);
+    robe.scale.set(1,1,.86);
+    // sleeves, wide the way a thobe's are, hanging past the elbow
+    for(const arm of [armL,armR]){
+      const sl=mk(new THREE.CylinderGeometry(.085,.115,.46,9,1,true),clothMat,0,-.20,0,arm);
+      sl.scale.set(1,1,.9);
+    }
+    // shoulders read as cloth over bone
+    const yoke=mk(new THREE.SphereGeometry(.205,12,8),clothMat,0,.36,0,spine);
+    yoke.scale.set(1.22,.55,.82);
+  }
+  if(kind==='thobe'||kind==='abaya'){
+    const headMat = dark
+      ? new THREE.MeshStandardMaterial({map:tex(TEX.thobe,1),color:0x23201e,
+          roughness:.99,envMapIntensity:.1,side:THREE.DoubleSide})
+      : new THREE.MeshStandardMaterial({map:tex(Math.random()<.62?TEX.shemagh:TEX.thobe,1),
+          normalMap:nrm(TEX.shemagh,1,.9), normalScale:new THREE.Vector2(.7,.7),
+          roughness:.97,envMapIntensity:.12,side:THREE.DoubleSide});
+    cloths.push(headMat);
+    // the cloth over the skull
+    const cap=mk(new THREE.SphereGeometry(.132,14,10,0,6.284,0,1.15),headMat,0,.055,0,neck);
+    cap.scale.set(1.04,1.12,1.06);
+    // and the two panels that fall to the shoulders — the silhouette everyone
+    // recognises from across a street
+    for(const sx of [-1,1]){
+      const p=mk(new THREE.BoxGeometry(.075,.34,.10),headMat,sx*.115,-.10,-.01,neck);
+      p.rotation.z=sx*.10; p.rotation.x=-.06;
+    }
+    const back=mk(new THREE.BoxGeometry(.19,.26,.055),headMat,0,-.06,-.105,neck);
+    back.rotation.x=.14;
+    if(!dark){                                  // the agal, still holding it on
+      const agalMat=new THREE.MeshStandardMaterial({color:0x14110f,roughness:.62,metalness:.05});
+      cloths.push(agalMat);
+      const ring = typeof THREE.TorusGeometry==='function'
+        ? new THREE.TorusGeometry(.126,.019,6,16) : new THREE.CylinderGeometry(.14,.14,.03,14);
+      const a1=mk(ring,agalMat,0,.118,0,neck); a1.rotation.x=Math.PI/2;
+      const a2=mk(ring,agalMat,0,.156,0,neck); a2.rotation.x=Math.PI/2;
+      a2.scale.setScalar(.94);
+    }
+  }
+
   return {grp,spine,neck,head,jaw,mouth,armL,armR,legL,legR,eyeMat,glowMat,
-          twitch:0,nextTwitch:Math.random()*2,jawOpen:0,mats:[flesh,rag]};
+          twitch:0,nextTwitch:Math.random()*2,jawOpen:0,mats:[flesh,rag].concat(cloths)};
 }
 
 function makeHuman(p){
@@ -1908,7 +2028,105 @@ function safeBuild(g){
   try{ buildScene(g); capEnv(0.30); }
   catch(err){ console.error("scene build failed:",err); }
 }
+/* ============================================================
+   the coast itself — the things that say which coast this is
+   ============================================================ */
+let palmGeo=null, palmMats=null, frondGeo=null;
+function makePalm(h,lean){
+  if(!palmGeo){
+    palmGeo=new THREE.CylinderGeometry(.10,.20,1,9,6,true);
+    frondGeo=new THREE.ConeGeometry(.20,2.05,4,3);
+    frondGeo.scale(1,1,.12);                       // a blade, not a spike
+    palmMats={
+      bark:new THREE.MeshStandardMaterial({map:tex(TEX.bark,1),
+        normalMap:nrm(TEX.bark,1,1.4), normalScale:new THREE.Vector2(1.1,1.1),
+        roughness:.98,metalness:0,envMapIntensity:.12,color:0x8a755a}),
+      frond:new THREE.MeshStandardMaterial({color:0x4b5433,roughness:.95,metalness:0,
+        envMapIntensity:.14,side:THREE.DoubleSide})
+    };
+  }
+  const g=new THREE.Group();
+  const trunk=new THREE.Mesh(palmGeo,palmMats.bark);
+  trunk.scale.set(1,h,1); trunk.position.y=h/2;
+  trunk.castShadow=true; trunk.receiveShadow=true;
+  // a palm never grows straight, and the lean is most of the silhouette
+  trunk.rotation.z=lean*.5;
+  g.add(trunk);
+  const crown=new THREE.Group();
+  crown.position.set(Math.sin(lean*.5)*h*.5, h*Math.cos(lean*.5), 0);
+  g.add(crown);
+  const n=8+((Math.random()*4)|0);
+  for(let i=0;i<n;i++){
+    const fr=new THREE.Mesh(frondGeo,palmMats.frond);
+    const a=(i/n)*6.283+Math.random()*.3;
+    const droop=.55+Math.random()*.65;             // the older ones hang further
+    fr.position.set(Math.cos(a)*.16,-.05,Math.sin(a)*.16);
+    fr.rotation.order='YXZ';
+    fr.rotation.y=-a;
+    fr.rotation.z=Math.PI/2-droop;
+    fr.scale.setScalar(.85+Math.random()*.4);
+    fr.castShadow=true;
+    crown.add(fr);
+  }
+  return g;
+}
+
+/* the town on the headland: pure silhouette, far past the play area, so it
+   costs almost nothing and does almost all of the work of saying "here" */
+function makeSkyline(night){
+  const g=new THREE.Group();
+  const stone=new THREE.MeshStandardMaterial({
+    color:night?0x1d242a:0x6d6052, roughness:1, metalness:0, envMapIntensity:.1});
+  const hill=new THREE.Mesh(new THREE.SphereGeometry(30,20,10,0,6.284,0,Math.PI/2),stone);
+  hill.scale.set(1,.30,.62); g.add(hill);
+  const r=rng(5);
+  for(let i=0;i<26;i++){                           // flat-roofed houses, stacked
+    const w=1.6+r()*3.2, hh=1.5+r()*3.4, d=1.6+r()*2.6;
+    const b=new THREE.Mesh(new THREE.BoxGeometry(w,hh,d),stone);
+    const a=(r()-.5)*2.1, rad=3+r()*22;
+    b.position.set(Math.cos(a)*rad, 9*Math.max(0,1-Math.abs(Math.cos(a)*rad)/30)+hh/2-1, Math.sin(a)*rad*.6);
+    b.rotation.y=r()*.5;
+    g.add(b);
+  }
+  // the minaret: the one vertical in a town of horizontals
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(.75,1.05,15,10),stone);
+  shaft.position.set(2,16,-1); g.add(shaft);
+  const gal=new THREE.Mesh(new THREE.CylinderGeometry(1.25,1.25,.9,10),stone);
+  gal.position.set(2,22.6,-1); g.add(gal);
+  const cap=new THREE.Mesh(new THREE.ConeGeometry(1.15,2.6,10),stone);
+  cap.position.set(2,24.5,-1); g.add(cap);
+  return g;
+}
+
+function buildCoast(g){
+  const sea = (g.sky==='beach'||g.sky==='night');
+  if(!sea) return;
+  // the headland, set well beyond the far wall
+  const sk=makeSkyline(g.sky==='night');
+  sk.position.set(WX(g.W)*.62, -1.2, WZ(0)-58);
+  sk.scale.setScalar(1.25);
+  scene.add(sk);
+  const sk2=makeSkyline(g.sky==='night');
+  sk2.position.set(-26, -2.4, WZ(g.H)*.5);
+  sk2.scale.setScalar(.8); sk2.rotation.y=1.1;
+  scene.add(sk2);
+  // and the palms, in the loose line they actually grow in along a corniche
+  const r=rng(g.screen*17+3);
+  const n = g.sky==='night' ? 13 : 9;
+  for(let i=0;i<n;i++){
+    const t=i/(n-1);
+    const x = WX(g.W)*(0.06+t*0.92) + (r()-.5)*WX(70);
+    const z = (g.sky==='night') ? WZ(g.H)*0.12+(r()-.5)*WX(60)
+                                : WZ(g.H)*0.93+(r()-.5)*WX(90);
+    const p=makePalm(3.4+r()*2.8,(r()-.5)*.5);
+    p.position.set(x,0,z);
+    p.rotation.y=r()*6.28;
+    scene.add(p);
+  }
+}
+
 function buildScene(g){
+
   disposeScene();
   dyn={infected:[],survivors:[],items:[]};
   scene=new THREE.Scene();
@@ -2261,6 +2479,8 @@ function buildScene(g){
     m.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
     scene.add(m); dyn.items.push({it,m});
   }
+
+  buildCoast(g);
 
   // held weapon rides the camera
   if(viewModel){ camera.remove(viewModel); viewModel=null; }
