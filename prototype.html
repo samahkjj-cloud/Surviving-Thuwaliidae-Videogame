@@ -2471,7 +2471,7 @@ function renderFrame(){
 
 /* ---------------- loop ---------------- */
 
-let frameAvg=16;
+let frameAvg=16, builtAt=0;
 function loop(now){
   const dt=Math.min(.05,(now-last)/1000);
   last=now; t+=dt;
