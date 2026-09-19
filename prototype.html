@@ -1671,6 +1671,7 @@ function buildEnv(g){
   const grd=x.createLinearGradient(0,0,0,c.height);
   for(const st of ENV_SKY[key]) grd.addColorStop(st[0],st[1]);
   x.fillStyle=grd; x.fillRect(0,0,c.width,c.height);
+  x.fillStyle='rgba(0,0,0,0.74)'; x.fillRect(0,0,c.width,c.height);
   try{
     const t=new THREE.CanvasTexture(c);
     t.mapping=THREE.EquirectangularReflectionMapping;
@@ -1881,8 +1882,19 @@ function hullPath(sx,sy,inset){
   return p;
 }
 
+function capEnv(max){
+  if(!scene) return;
+  scene.traverse(o=>{
+    const ms = o.material ? (Array.isArray(o.material)?o.material:[o.material]) : [];
+    for(const m of ms){
+      if(m && m.isMeshStandardMaterial && m.envMapIntensity>max){
+        m.envMapIntensity=max; m.needsUpdate=true;
+      }
+    }
+  });
+}
 function safeBuild(g){
-  try{ buildScene(g); }
+  try{ buildScene(g); capEnv(0.30); }
   catch(err){ console.error("scene build failed:",err); }
 }
 function buildScene(g){
